@@ -4,13 +4,15 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from pylab import cm
+from pathlib import Path
+
 
 
 def plot_checks(pupil_plane,
                 fp_mask_amp, fp_mask_phase, fp_mask_extent,
                 lbd0, xyunit, lyot_plane_intensity,
                 parangle_tab, zenith_dist_tab, ha_hours,
-                save_path, save_plots=False):
+                save_path, timestamp, save_plots=False):
     """
     Checking plots for a quick simulation overview:
         window 17: pupil planes (entrance pupil and Lyot plane) amplitude and
@@ -137,13 +139,23 @@ def plot_checks(pupil_plane,
     ax2.set_ylabel('Zenith distance', color='r')
 
     ### SAVE plots in png images ----------------------------------------------
-    plt.figure(num=17)
-    plt.savefig(save_path+'_pupil_planes.png', dpi=120, bbox_inches='tight')
-    plt.figure(num=18)
-    plt.savefig(save_path+'_focal_plane_mask.png', dpi=120, bbox_inches='tight')
-    plt.figure(num=19)
-    plt.savefig(save_path+'_before-after_lyot.png', dpi=120, bbox_inches='tight')
-    plt.figure(num=20)
-    plt.savefig(save_path+'_parallactic_angle.png', dpi=120, bbox_inches='tight')
+    if save_plots:
+        
+        save_path = save_path + 'png_figures/' 
+        
+        p = Path(save_path)
+        if p.exists() is False:
+            os.makedirs(save_path)
+        
+        save_path = save_path + timestamp
+        
+        plt.figure(num=17)
+        plt.savefig(save_path+'_pupil_planes.png', dpi=120, bbox_inches='tight')
+        plt.figure(num=18)
+        plt.savefig(save_path+'_focal_plane_mask.png', dpi=120, bbox_inches='tight')
+        plt.figure(num=19)
+        plt.savefig(save_path+'_before-after_lyot.png', dpi=120, bbox_inches='tight')
+        plt.figure(num=20)
+        plt.savefig(save_path+'_parallactic_angle.png', dpi=120, bbox_inches='tight')
 
     return 1

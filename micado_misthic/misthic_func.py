@@ -569,6 +569,9 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
 
 
     ## DISPLAY [AMP APOD + LYOT] TRANSMISSION ##
+    # print(pre_apod.shape)
+    # print(lyot_mask.shape)
+    # print(pup_mask.shape)
     coro_throughput_max = np.sum(np.abs(pre_apod**2*lyot_mask))/np.sum(pup_mask)
     if silent is not True:
         print('---\nApodization transmission        = {0:4.3f}'.format(np.sum(np.abs(pre_apod**2*pup_mask))/np.sum(pup_mask)))
@@ -583,7 +586,7 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
     x2          = int(pup_diameter * det_sampling/2.+focal_npix/2.)
 
     if silent is not True:
-        print(get_timestamp(stamp_format='full')+ ' -- STARTING LOOP\n')
+        print(get_timestamp(stamp_format='full')+ ' -- DO PERFECT PSF\n')
 
     # Polychro PSF cube initialization
     nocoro_polycube = np.zeros((n_wave, x2-x1, x2-x1))
@@ -626,7 +629,7 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
         nocoro_polycube[l] = nocoro_mono
 
         if l == 0:
-            perf_nocoro_poly = nocoro_mono.copy() / n_wave
+            perf_nocoro_poly = nocoro_mono / n_wave ### ELsa 230928 removed the .copy()
             if save_fits_poly :
                 perf_factor_poly = np.zeros(n_wave) + np.max(nocoro_mono)
         else :
@@ -689,6 +692,8 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
     else:
         main_loop = range(n_images)
 
+    if silent is not True:
+        print(get_timestamp(stamp_format='full')+ ' -- STARTING MAIN LOOP\n')
     for i in main_loop :
 
         if (silent is not True and progress_bar is not True):
@@ -817,7 +822,8 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
                 wave_loop = trange(n_wave, desc='wave ')#, ascii=True)
             else :
                 wave_loop = range(n_wave)
-
+            
+            
             for l in wave_loop : # ======= loop on wavelengths
 
                 ####################### WAVEFRONT ########################
@@ -908,7 +914,7 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
                         lyot_before_mono = propag_output['img_before_lyot']
                     if save_fits_lyot_after :
                         lyot_after_mono = propag_output['img_after_lyot']
-
+                    
                     if do_psf :
                         if ((fp_mask == 'vapp') | (fp_mask == 'nomask') | (fp_mask == 'nocoro'))  :
                             # no need to compute the 'non-coro' PSF in the case of the vAPP,
@@ -994,16 +1000,11 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
 #                                                         det_fov_pix=(x1,x2),
 #                                                         det_sampling=det_sampling*pup_ratio)
 
-                
                 ############### CHECKING PLOTS ############################################
                 ###########################################################################
                 if (checking_plots is True and i == 0 and t==0 and l == 0):
 #                    plot_time =  mgf.get_timestamp(stamp_format='full_tight')
-                    plot_time = stamp_start
-                    save_dir = output_directory + 'png_figures/'
-                    p = Path(save_dir)
-                    if (p.exists() is False and save_fits_img is True):
-                        os.makedirs(save_dir)
+                    
                     if isinstance(lyot_mask,float):
                         disp_lyot_mask = pup_mask * 0.
                     else :
@@ -1027,9 +1028,8 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
                     plot_checks(pupil_plane, fp_mask_amp, fp_mask_phase,
                                     fp_mask_extent, lbd0, xyunit, propag_output,
                                     parangle_tab, zenith_dist_tab, ha_hours,
-                                    save_dir+plot_time, save_plots = (save_fits_img&save_png) )
+                                    output_directory, stamp_start, save_plots = (save_fits_img&save_png) )
                 ###########################################################################
-
 #                detector_img_mono = propag_output['img_detector']
                 if save_fits_lyot_before :
                     lyot_before_mono = propag_output['img_before_lyot']
@@ -1037,10 +1037,10 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
                     lyot_after_mono = propag_output['img_after_lyot']
                 if do_psf :
                     noco_mono= propag_mono_output['img_detector']
-
                 # Coronagraphic image cube
                 if (save_fits_poly and i==0) :
-                    coro_polycube[l] = detector_img_mono / perf_factor_poly[l]
+                    coro_polycube[l] = detector_img_mono / perf_factor #/ perf_factor_poly[l]
+                    ### Elsa 2024.03.19 changed the normalization factor
 
                 if l == 0:
                     detector_img_poly = detector_img_mono / n_wave
@@ -1054,16 +1054,15 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
                         lyot_before_poly = lyot_before_poly + lyot_before_mono / n_wave
                     if save_fits_lyot_after :
                         lyot_after_poly = lyot_after_poly + lyot_after_mono / n_wave
-
                 # PSF image cube (no coro - no apod, no fp mask, no lyot -, with aberr)
                 if do_psf :
                     if (save_fits_poly and i==0) :
-                        noco_polycube[l] = noco_mono / perf_factor_poly[l]
+                        noco_polycube[l] = noco_mono / perf_factor #/ perf_factor_poly[l]
+                        ### Elsa 2024.03.19 changed the normalization factor
                     if l == 0:
                         detector_psf_poly = noco_mono / n_wave
                     else :
                         detector_psf_poly = detector_psf_poly + noco_mono / n_wave
-
 
             # average over turbulence phase screens
             if t == 0:
@@ -1078,7 +1077,6 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
                     lyot_before_turbu = lyot_before_turbu + lyot_before_poly / n_img_mean
                 if save_fits_lyot_after :
                     lyot_after_turbu = lyot_after_turbu + lyot_after_poly / n_img_mean
-
             if do_psf :
                 if t == 0:
                     detector_psf_turbu = detector_psf_poly / n_img_mean
@@ -1093,10 +1091,10 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
         if i == 0 :
             sy, sx = detector_img_turbu.shape
 
-            final_detector_img_cube = np.zeros((n_images, sy, sx), dtype='float32')
+            final_detector_img_cube = np.zeros((n_images, sy, sx), dtype='float64') ########### 2023.10.20 float64 instead of 32
 
             if do_psf :
-                final_detector_psf_cube = np.zeros((n_images, sy, sx), dtype='float32')
+                final_detector_psf_cube = np.zeros((n_images, sy, sx), dtype='float64') ########### 2023.10.20
             else :
                 final_detector_psf_cube = 0.
 

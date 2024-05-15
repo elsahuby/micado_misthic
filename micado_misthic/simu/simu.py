@@ -8,7 +8,7 @@ from ..simu.zernike import get_tilted_wavefront
 from ..imgproc import get_circle_mask
 
 def do_fftw_crosszp(img, zero_pad_factor = 2, fov = 5, fov_pix = None,
-                    planner_effort='FFTW_MEASURE',
+                    planner_effort='FFTW_MEASURE', #'FFTW_PATIENT', #, #'FFTW_ESTIMATE'
                     auto_align_input=False, overwrite_input = True) :
     """
     Same as numpy.fft.fft with 2-step padding (one direction after the other).
@@ -32,11 +32,20 @@ def do_fftw_crosszp(img, zero_pad_factor = 2, fov = 5, fov_pix = None,
     zp1 = int((output_size-grid_width)/2.)
     zp2 = int((output_size+grid_width)/2.)
     padded_img[zp1:zp2,] = img
+    
+    # ################ DEBUG ##########################
+    # print("padded_img.shape", padded_img.shape)
+    # ################ END DEBUG ######################
+    
+    pyfftw.interfaces.cache.enable() ## Elsa 2024.03.19
 
     img_fft_tmp = pyfftw.interfaces.numpy_fft.fft(np.fft.fftshift(padded_img, axes=0), axis=0,
-                                               planner_effort = planner_effort,
-                                               auto_align_input = auto_align_input,
-                                               threads=2, overwrite_input=overwrite_input)
+                                                planner_effort = planner_effort,
+                                                auto_align_input = auto_align_input,
+                                                threads=8, overwrite_input=overwrite_input )#,
+                                                #norm='backward') #/np.sqrt(output_size*grid_width)
+    ### Elsa 2024.03.19 added the normalization factor
+    # img_fft_tmp = np.fft.fft(np.fft.fftshift(padded_img, axes=0), axis=0, norm='backward')
 
     final_n = x2-x1
     c = int(final_n/2.)
@@ -47,9 +56,16 @@ def do_fftw_crosszp(img, zero_pad_factor = 2, fov = 5, fov_pix = None,
     img_fft[c:,zp1:zp2] = img_fft_tmp[:c,]
 
     img_fft_tmp = pyfftw.interfaces.numpy_fft.fft(np.fft.fftshift(img_fft, axes=1), axis=1,
-                                               planner_effort = planner_effort,
-                                               auto_align_input = auto_align_input,
-                                               threads=2, overwrite_input=overwrite_input)
+                                                planner_effort = planner_effort,
+                                                auto_align_input = auto_align_input,
+                                                threads=8, overwrite_input=overwrite_input)#,
+                                                #norm='backward') #/np.sqrt(final_n*output_size)
+    ### Elsa 2024.03.19 added the normalization factor
+    # img_fft_tmp = np.fft.fft(np.fft.fftshift(img_fft, axes=1), axis=1, norm='forward')
+    
+    ### Elsa 2024.03.19: note that the simple numpy fft goes faster for a single computation,
+    ### but if the FFT computation is repeated (with the same parameters), it is worth planning
+    ### the computation with pyFFT (that is why it takes much longer for the first iteration)
 
     img_fft = np.zeros((final_n, final_n), dtype=type(img_fft_tmp[0,0]))
 
@@ -173,7 +189,7 @@ def propagate_mono_lyot(input_wavefront, lyot_mask, occulter_fov = 1.,
 
 
     after_lyot_stop = before_lyot_stop * lyot_mask
-
+    
     detector_img = np.abs(do_fftw_crosszp(after_lyot_stop*np.conj(tiptilt_form_fp)*tiptilt_form_det,
                                           zero_pad_factor = det_sampling*lbd_coeff,
                                           fov_pix = det_fov_pix))**2
@@ -283,13 +299,19 @@ def propagate_mono_vortex(input_wavefront, vortex_mask, lyot_mask,
             before_lyot_stop = matrixDFT.matrix_dft(focal_plane*vortex_mask, fp_fov, pup_shape, inverse=True)
     #                                                centering='FFTSTYLE')
         else :
-            focal_plane = do_fftw_crosszp(input_wavefront*tiptilt_form_fp, zero_pad_factor = fp_sampling, fov = fp_fov)
+            focal_plane = do_fftw_crosszp(input_wavefront*tiptilt_form_fp, 
+                                          zero_pad_factor = fp_sampling, fov = fp_fov)
             before_lyot_stop = do_fftw_crosszp(focal_plane*vortex_mask,
                                                zero_pad_factor = pup_shape[0]/fp_sampling,
                                                fov = fp_fov)
 
     after_lyot_stop = before_lyot_stop * lyot_mask
     after_lyot_stop2 = after_lyot_stop*np.conj(tiptilt_form_fp)*tiptilt_form_det
+
+    # ################ DEBUG ##########################
+    # print("lbd_coeff", lbd_coeff)
+    # print("det_sampling", det_sampling)
+    # ################ END DEBUG ######################
 
     detector_img = np.abs(do_fftw_crosszp(after_lyot_stop2,
                                           zero_pad_factor = det_sampling*lbd_coeff,

@@ -67,29 +67,38 @@ def get_air_index(wavelength, pressure=537., temperature=10., rel_humidity=20.):
 
 def scale_to_photons(img_cube, perf_psf, photon_flux, emission_flux, 
                      frame_exp_time, sig_ron = 15., no_noise=False,
-                     set_ron_equivalent=True):
+                     set_ron_equivalent=True, silent=True):
     """
     Convert the image levels into photons and include the photon noise and read out noise.
     """
-    
+    if len(img_cube.shape) == 2:
+        img_cube = img_cube[np.newaxis,:,:]
+        nocube = True
+    else :
+        nocube = False
+        
     n_img, n_y, n_x = img_cube.shape
-    obs_time = frame_exp_time * n_img
+    # obs_time = frame_exp_time * n_img
     ones_array = np.ones_like(img_cube)
     
     ### convert into mean photon numbers
     perf_psf_sum = np.sum(perf_psf)
     conv_factor = photon_flux / perf_psf_sum # convert from ADU to photons !         
 
-
     # psf_photon_flux = np.sum(psf_cube) * conv_factor
     # img_photon_flux = np.sum(coro_cube)* conv_factor
     
     if len(img_cube.shape) == 2:
-        mean_psf = np.sum(img_cube)
-        flux_per_frame = photon_flux/mean_psf
-    elif len(img_cube.shape) == 3:
-        mean_psf         = np.sum(img_cube, axis=(1,2))
-        # flux_per_frame = np.expand_dims(photon_flux/mean_psf, (1,2))
+        img_cube = img_cube[np.newaxis,:,:]
+        
+    # if len(img_cube.shape) == 2:
+    #     mean_psf = np.sum(img_cube)
+    #     flux_per_frame = photon_flux/mean_psf
+    # elif len(img_cube.shape) == 3:
+    #     mean_psf         = np.sum(img_cube, axis=(1,2))
+    #     # flux_per_frame = np.expand_dims(photon_flux/mean_psf, (1,2))
+    
+    img_cube_sum = np.sum(img_cube, axis=(1,2)).mean()
     
     # print('conv_factor = ', conv_factor)
     img_cube = np.abs(img_cube) * conv_factor
@@ -98,13 +107,21 @@ def scale_to_photons(img_cube, perf_psf, photon_flux, emission_flux,
 
     flux_per_frame = np.sum(img_cube, axis=(1,2)).mean()
     
+    if not silent:
+        print(f'\n\n### obsparams.scale_to_photon'+
+              f'\n\tperf_psf_sum=  \t{perf_psf_sum:.2e}'+
+              f'\n\timg_cube_sum=  \t{img_cube_sum:.2e}'+
+              f'\n\tphoton_flux=   \t{photon_flux:.2e}'+
+              f'\n\tflux_per_frame=\t{flux_per_frame:.2e}')
+    
     if no_noise is False: ### MAKE NOISE
         rng = np.random.default_rng()
         np.random.seed(198717161)
         
         # Apply photon noise 
         # coro_cube_noisy = np.zeros_like(coro_cube)
-        print(f"### Total Flux (within scale_to_photon func): {photon_flux:.1f}")
+        if not silent:
+            print(f"### Total Flux (within scale_to_photon func): {photon_flux:.3e}")
         img_cube_noisy = rng.poisson(img_cube)
         # psf_cube_noisy  = rng.poisson(psf_cube)
         perf_psf_noisy  = rng.poisson(perf_psf)
@@ -119,16 +136,21 @@ def scale_to_photons(img_cube, perf_psf, photon_flux, emission_flux,
                 exp_time = FWC / (np.max(mean_coro) / frame_exp_time)
                 
                 if exp_time <= 1.3 or exp_time >= frame_exp_time:
-                    print("### Warning! Exposure time outside desired range ! ): {}".format(exp_time))
+                    if not silent :
+                        print("### Warning! Exposure time outside desired range ! ): {}".format(exp_time))
                     if exp_time >= frame_exp_time:
                         exp_time = frame_exp_time
-                print("### Exposure time:", exp_time)
-                val_exp = np.zeros(2)
+                if not silent:
+                    print("### Exposure time:", exp_time)
+                
                 ron_noise = sig_ron*np.sqrt(frame_exp_time / exp_time)
-                val_exp[0] = FWC / (np.max(mean_coro) / frame_exp_time)
-                val_exp[1] = FWC / (np.max(mean_psf) / frame_exp_time)
+                
+                # val_exp = np.zeros(2)
+                # val_exp[0] = FWC / (np.max(mean_coro) / frame_exp_time)
+                # val_exp[1] = FWC / (np.max(mean_psf) / frame_exp_time)
             else :
-                print('### No scaling of the RON for optimized exp time.')
+                if not silent:
+                    print('### No scaling of the RON for optimized exp time.')
                 ron_noise = sig_ron
             img_cube_noisy = img_cube_noisy + rng.standard_normal(size=(n_img,n_y,n_x)) * ron_noise    # RON is a gaussian noise 
             # psf_cube_noisy  = psf_cube_noisy + rng.standard_normal(size=(n_img,n_y,n_x)) * noise_eq
@@ -143,6 +165,9 @@ def scale_to_photons(img_cube, perf_psf, photon_flux, emission_flux,
         img_cube_noisy = img_cube + ones_array * emission_flux * frame_exp_time
         # psf_cube_noisy = psf_cube + ones_array * emission_flux * frame_exp_time
         perf_psf_noisy = perf_psf + ones_array[0] * emission_flux * frame_exp_time
+
+    if nocube:
+        img_cube_noisy = img_cube_noisy[0]
 
     return img_cube_noisy, perf_psf_noisy, flux_per_frame
 
