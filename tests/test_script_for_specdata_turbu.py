@@ -53,7 +53,7 @@ config.filename     = config_current
 config['input_directory']   = input_directory
 config['save_fits_poly']    = False
 config['save_png']          = False # will save some time and space
-config['simuconfig']['n_images'] = 1700 ### TO CHANGE
+config['simuconfig']['n_images'] = 1 ### TO CHANGE
 ### zenith distance
 zenith_distance     = 0
 ### Wavelength
@@ -132,13 +132,17 @@ wave_tab      = ((np.arange(n_wave)+0.5)/(n_wave)-0.5)*delta_lbd + lbd0
 ### To increase the spectral resolution: shift the wave_tab (subsequent rounds of simulations)
 # wave_tab      += (delta_lbd/n_wave / 2.)
 
-for lbd0 in wave_tab[0:1]:
+for lbd0 in wave_tab:
     # Wavelength
     config['waveconfig']['lbd0']            = lbd0
     config['waveconfig']['n_wave']          = 1
     config['waveconfig']['delta_lbd']       = 0
 
     config['output_directory'] = output_directory+f'/l={lbd0:.5f}um/'
+    
+    # scale sampling to current wavelength 
+    config['detectorconfig']['detector_sampling']   = (lbd0/l_min_ref) * det_sampling
+    config['detectorconfig']['detector_fov']        = det_fov * (l_min_ref/lbd0)
     
     # write down the config file
     config.write()

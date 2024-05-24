@@ -16,8 +16,8 @@ def do_fftw_crosszp(img, zero_pad_factor = 2, fov = 5, fov_pix = None,
     """
 
     grid_width = (img.shape)[0]
-    output_size = int(grid_width * zero_pad_factor)
-
+    output_size = int(np.round(grid_width * zero_pad_factor))
+    # print("output_size=", output_size)
     ### Define the field of view in pixels
     if fov_pix is None :
         fov_pix  = int(np.ceil(fov * zero_pad_factor /2.)*2.)
@@ -46,12 +46,13 @@ def do_fftw_crosszp(img, zero_pad_factor = 2, fov = 5, fov_pix = None,
                                                 #norm='backward') #/np.sqrt(output_size*grid_width)
     ### Elsa 2024.03.19 added the normalization factor
     # img_fft_tmp = np.fft.fft(np.fft.fftshift(padded_img, axes=0), axis=0, norm='backward')
-
+    # print("img_fft_tmp.shape", img_fft_tmp.shape)
     final_n = x2-x1
     c = int(final_n/2.)
-
+    # print("final_n=", final_n)
     img_fft = np.zeros((final_n, output_size), dtype=type(img_fft_tmp[0,0]))
-
+    # print("img_fft.shape", img_fft.shape)
+    # print("c, zp1, zp2", c, zp1, zp2)
     img_fft[:c,zp1:zp2] = img_fft_tmp[-c:,]
     img_fft[c:,zp1:zp2] = img_fft_tmp[:c,]
 
@@ -263,8 +264,8 @@ def propagate_mono_vortex(input_wavefront, vortex_mask, lyot_mask,
     fft_method = 'FFTW'
         FFT method for propagation from pupil to focal plane to Lyot plane.
         Can be:
-        'FFTW' (default)
-        'MFT'
+        'FFTW'
+        'MFT' (default)
 
     Returns
     -------
@@ -279,6 +280,7 @@ def propagate_mono_vortex(input_wavefront, vortex_mask, lyot_mask,
         lbd_ref = lbd
 
     lbd_coeff = lbd/lbd_ref
+    # print("lbd_coeff=",lbd_coeff)
 
     if centering == 'SYMMETRIC':
         demipix_fp  = 1. / (np.sqrt(2.)*np.float64(fp_sampling))
@@ -312,7 +314,7 @@ def propagate_mono_vortex(input_wavefront, vortex_mask, lyot_mask,
     # print("lbd_coeff", lbd_coeff)
     # print("det_sampling", det_sampling)
     # ################ END DEBUG ######################
-
+    # print("zero_pad_factor=", det_sampling*lbd_coeff)
     detector_img = np.abs(do_fftw_crosszp(after_lyot_stop2,
                                           zero_pad_factor = det_sampling*lbd_coeff,
                                           fov_pix = det_fov_pix))**2

@@ -581,10 +581,10 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
     ##################### PERFECT PSF: NO CORO - NO ABERR ####################
     # -----------------------------------------------------------------------#
     ## NO CORO MASK- NO LYOT MASK - NO APOD MASK
-    focal_npix  = int(np.ceil(det_fov * det_sampling /2.)*2.)
-    x1          = int(pup_diameter * det_sampling/2.-focal_npix/2.)
-    x2          = int(pup_diameter * det_sampling/2.+focal_npix/2.)
-
+    focal_npix  = int(np.round(det_fov * det_sampling /2.)*2.)
+    x1          = int(np.round(pup_diameter * det_sampling/2.-focal_npix/2.))
+    x2          = int(np.round(pup_diameter * det_sampling/2.+focal_npix/2.))
+    # print("focal_npix, x1, x2 = ", focal_npix, x1, x2)
     if silent is not True:
         print(get_timestamp(stamp_format='full')+ ' -- DO PERFECT PSF\n')
 
@@ -845,9 +845,9 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
                 # wavefront for no coro PSF : the same
 #                wavefront0 = wavefront.copy()
 
-                focal_npix  = int(np.ceil(det_fov * det_sampling /2.)*2.)
-                x1          = int(pup_diameter * det_sampling/2.-focal_npix/2.)
-                x2          = int(pup_diameter * det_sampling/2.+focal_npix/2.)
+                # focal_npix  = int(np.ceil(det_fov * det_sampling /2.)*2.)
+                # x1          = int(pup_diameter * det_sampling/2.-focal_npix/2.)
+                # x2          = int(pup_diameter * det_sampling/2.+focal_npix/2.)
 
                 if post_ADC_ON is True:
                     # perfect refraction tilt correction is assumed
