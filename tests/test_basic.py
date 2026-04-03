@@ -1,5 +1,5 @@
 """
-MICADO MISTHIC advanced test script.
+MICADO MISTHIC basic test script.
 
 The purpose is to simulate coronagraphic images with aberrations (turbulence
 residuals, static aberrations, Zernike polynomials.)
@@ -26,14 +26,10 @@ from validate import Validator
 paf_directory     = 'C:/Users/Red Slottje/Documents/Repo git misthic/tests/config_files/'
 
 # put the specific config file you need here
-config_file = "misthic_config_micado_CLC0_default.ini"
+config_file = "misthic_config_micado_CLC0"
 
-pf = paf_directory+config_file
+pf = paf_directory+config_file+'_default.ini'
 
-# pf = paf_directory+"misthic_config_micado_CLC0"
-# pf = paf_directory+"misthic_config_micado_CLC2"
-# pf = paf_directory+"misthic_config_micado_vortex2"
-# pf = paf_directory+"misthic_config_micado_CLC1"
 print('\n --- '+pf+' ---')
 
 ###### USER defined Params ###########################################################
@@ -64,8 +60,8 @@ if wave_name == 'J-mono' :
     lbd0, delta_lbd, n_wave       = 1.2475, 0., 1
 
 ### CONFIG file settings #####################################################
-config              = ConfigObj(pf, configspec = configspec_file)
-config_current      = pf
+config              = ConfigObj(pf+'_default.ini', configspec = configspec_file)
+config_current      = pf+'_current.ini'
 config.filename     = config_current
 
 # Simulation config
