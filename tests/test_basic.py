@@ -22,17 +22,24 @@ from configobj import ConfigObj
 from validate import Validator
 
 ## PARAMETER FILE: CORO CONFIG
-paf_directory     = 'config_files/'
+# put the path to your config files here
+paf_directory     = 'C:/Users/Red Slottje/Documents/Repo git misthic/tests/config_files/'
 
-pf = paf_directory+"misthic_config_micado_CLC0"
-pf = paf_directory+"misthic_config_micado_CLC2"
-pf = paf_directory+"misthic_config_micado_vortex2"
-pf = paf_directory+"misthic_config_micado_CLC1"
+# put the specific config file you need here
+config_file = "misthic_config_micado_CLC0_default.ini"
+
+pf = paf_directory+config_file
+
+# pf = paf_directory+"misthic_config_micado_CLC0"
+# pf = paf_directory+"misthic_config_micado_CLC2"
+# pf = paf_directory+"misthic_config_micado_vortex2"
+# pf = paf_directory+"misthic_config_micado_CLC1"
 print('\n --- '+pf+' ---')
 
 ###### USER defined Params ###########################################################
 ind_coro = pf.find('micado_') + len('micado_')
-output_directory = '/home/ehuby/WORK/SIMU/SIMU_MICADO/OUTPUT/'+pf[ind_coro:]+'/'
+output_directory = 'C:/Users/Red Slottje/Documents/Misthic_outputs/'
+input_directory = 'C:/Users/Red Slottje/Documents/Misthic_inputs/'
 checking_plots = True
 wave_name = 'J-mono'
 
@@ -43,7 +50,9 @@ det_fov                 = 128 # lamdba/D
 local_test = True
 
 ### path to the configspec file (same as the misthic_func.py module)
-configspec_file   = os.path.dirname(misthic_func.__file__)+'/misthic_configspec.ini'
+    #using os.path.dirname in Windows puts the path with antislashes, which Python can't interpret
+#configspec_file   = os.path.dirname(misthic_func.__file__)+'/misthic_configspec.ini'
+configspec_file = 'C:/Users/Red Slottje/Documents/Repo git misthic/micado_misthic/misthic_configspec.ini'
 
 
 ### Spectral band ############################################################
@@ -55,12 +64,12 @@ if wave_name == 'J-mono' :
     lbd0, delta_lbd, n_wave       = 1.2475, 0., 1
 
 ### CONFIG file settings #####################################################
-config              = ConfigObj(pf+"_default.ini", configspec=configspec_file)
-config_current      = pf+"_current.ini"
+config              = ConfigObj(pf, configspec = configspec_file)
+config_current      = pf
 config.filename     = config_current
 
 # Simulation config
-config['input_directory'] = '/home/ehuby/WORK/SIMU/SIMU_MICADO/INPUT/'
+config['input_directory'] = input_directory
 config['simuconfig']['n_images'] = 1
 
 # Simulation aberrations
@@ -89,7 +98,8 @@ config['detectorconfig']['detector_fov']        = det_fov
 config['detectorconfig']['detector_sampling']   = det_sampling
 
 # data directory
-config['output_directory'] = output_directory + 'misthic_test/'
+#creates a different directory for the results of each config file
+config['output_directory'] = output_directory + config_file+'/'
 
 # write down the config file
 config.write()
