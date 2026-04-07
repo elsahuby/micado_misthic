@@ -358,7 +358,7 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
         if checking_plots is True :
             fp_mask_fov = np.rint(occulter_rad * 4) # [lambda/D]
 #            occulter_rad_mas = occulter_rad * lbdd0 * 1000. # [mas]
-            fp_mask_shape = (np.int(np.round(fp_mask_fov*mft_sampling)),np.int(np.round(fp_mask_fov*mft_sampling)))
+            fp_mask_shape = (np.int64(np.round(fp_mask_fov*mft_sampling)),np.int64(np.round(fp_mask_fov*mft_sampling)))
             fp_mask_amp = 1.-get_circle_mask(fp_mask_shape, occulter_rad*mft_sampling)
             fp_mask_phase = fp_mask_amp * 0.
             sy, sx = fp_mask_shape
