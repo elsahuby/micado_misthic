@@ -250,7 +250,7 @@ for i in range(len(lbd)):
             print('----------')
             print("Beginning coro ADI processing")
             # adi_sum_coro, psf_sum_coro = micado_adi(img_noise_coro, psf_noise_coro, coro_sim_dir)
-            adi_sum_coro, psf_sum_coro = micado_adi(coro_cube_noisy, psf_cube_noisy, parallactic_angle_dir+f'parangle_{n_images}_imagespercube.txt')
+            adi_sum_coro, psf_sum_coro = micado_adi(coro_cube_noisy, psf_cube_noisy, parallactic_angle_dir+f'parangle_tab_{n_images}_imagespercube.txt')
             #adi_sum_coro, psf_sum_coro = micado_adi(coro_cube_noisy, psf_cube_noisy, coro_sim_dir)
         
             ### Convolution
