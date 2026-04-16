@@ -14,8 +14,9 @@ from scipy import interpolate
 import os
 from astropy import units as u
 import glob
+from astropy.table import Table
 
-from micado_misthic.utils.obsparams import *
+from micado_misthic.utils.obsparams import * 
 from micado_misthic.imgproc import get_circle_mask
 from micado_misthic.imgproc import fft_resize
 from micado_misthic.imgproc import micado_adi
@@ -23,7 +24,7 @@ from micado_misthic.imgproc import micado_adi
 from micado_misthic.analysis import get_rms_contrast
 from scipy.signal import fftconvolve
 
-plt.style.use('seaborn-muted')
+#plt.style.use('seaborn-muted')
 #plt.style.use('viridis')
 
 
@@ -35,8 +36,8 @@ lbd             = [1.190, 1.270, 1.582, 1.693, 2.100, 2.235] #, 1.245, 1.635, 2.
 lbd             = [2.100] #, 1.245, 1.635, 2.145]#, 1.635, 1.693] # in um
 
 ###-- Observation params
-coronagraph     = 'CLC1' # 'CLC0' or 'CLC1'
-quartile        = 'Q1'#['Q1', 'Q4', 'MED']
+coronagraph     = 'CLC0' # 'CLC0' or 'CLC1'
+quartile        = 'Q4'#['Q1', 'Q4', 'MED']
 frame_exp_time  = 10. ## exposure time per frame in seconds ### NEW
 # obs_time = 1800 # total obs time in seconds
 ron             = 15 # electrons; from FDR paper
@@ -63,28 +64,28 @@ pl_dist = [50] #, 100, 200, 500]
 ###-- Star Parameters
 
 ### HR8799 ###################################################################
-star_mag = 5.24 # in K 
-star_name = 'HR8799_'
-zenith_distance = np.abs(-24.5 - (21.1)) # deg
-dist_pc = 39.4 # distance in parsecs
-airmass = 1./np.cos(zenith_distance*np.pi/180.)
-r_pl    = 1 # jupiter masses
-temp    = 800 # Kelvin
-logg    = 4.
-met     = .32
-CO      = 0.1
+# """ star_mag = 5.24 # in K 
+# star_name = 'HR8799_'
+# zenith_distance = np.abs(-24.5 - (21.1)) # deg
+# dist_pc = 39.4 # distance in parsecs
+# airmass = 1./np.cos(zenith_distance*np.pi/180.)
+# r_pl    = 1 # jupiter masses
+# temp    = 800 # Kelvin
+# logg    = 4.
+# met     = .32
+# CO      = 0.1 """
 
 ### Eps Eridani ##############################################################
-# star_mag = 1.75 # in H
-# star_name = 'EpsEri'
-# # zenith_distance = np.abs(-24.5 - (-9-27/60.))
-# dist_pc = 3.2 # distance in parsecs
-# airmass = 1. #/np.cos(zenith_distance*np.pi/180.)
-# r_pl    = 1 # jupiter masses
-# temp    = 500 # Kelvin
-# logg    = 4.5
-# met     = 1.00
-# CO      = 0.5
+star_mag = 1.75 # in H
+star_name = 'EpsEri'
+zenith_distance = np.abs(-24.5 - (-9-27/60.))
+dist_pc = 3.2 # distance in parsecs
+airmass = 1. #/np.cos(zenith_distance*np.pi/180.)
+r_pl    = 1 # jupiter masses
+temp    = 500 # Kelvin
+logg    = 4.5
+met     = 1.00
+CO      = 0.5
 
 # Planet magnitude: 
 # planet_mag = 23
@@ -92,24 +93,48 @@ CO      = 0.1
 
 ###-- Directories
 ### directory with flux & transmission data for MICADO
-flux_dir                    = 'C:/Users/Red Slottje/Documents/Misthic_inputs/INFLUX'
+flux_dir                    = 'C:/Users/Red Slottje/Documents/Misthic_inputs/Flux_input/'
 
 ### directory with simulated spectrum data
-spec_dir                    = '/home/ehuby/WORK/SIMU/SIMU_MICADO/INPUT/Grid_BCharnay/cloud_R500/'
+spec_dir                    = 'C:/Users/Red Slottje/Documents/Misthic_inputs/R500_cloudless_2025/'
 ### directories with the coronagraphic simulated images
-coro_sim_dir_prefix         = f'C:/Users/Red Slottje/Documents/Misthic_outputs/coro_sims/{coronagraph}_{quartile}_NoNCPA/'
-planet_sim_dir_prefix       = f'C:/Users/Red Slottje/Documents/Misthic_outputs/planet_sims/{coronagraph}_{quartile}_NoNCPA/'
-coro_resized_dir_prefix     = f'C:/Users/Red Slottje/Documents/Misthic_outputs/resized_coro_fft/{coronagraph}_{quartile}_noNCPA/'
-planet_resized_dir_prefix   = f'C:/Users/Red Slottje/Documents/Misthic_outputs/resized_fft_planet/{coronagraph}_{quartile}_noNCPA/'
+directory_prefix                 = f'D:/FROM_NELLIE/'
+
+parallactic_angle_dir       = f'D:/FROM_RED/parallactic_angle/'
+#in the FROM_NELLIE directory coro_sims are stored in planet_sims
+coro_sim_dir_prefix         = directory_prefix+f'planet_sims/{coronagraph}_{quartile}_NoNCPA/'
+planet_sim_dir_prefix       = directory_prefix+f'planet_sims/{coronagraph}_{quartile}_NoNCPA/'
+coro_resized_dir_prefix     = directory_prefix+f'resized_fft/{coronagraph}_{quartile}_noNCPA/'
+planet_resized_dir_prefix   = directory_prefix+f'resized_fft_planet/{coronagraph}_{quartile}_noNCPA/'
+
 ### directories where the resulting ADI images are saved
-adi_img_dir_prefix          = f'C:/Users/Red Slottje/Documents/Misthic_outputs/Coro_ADI/{star_name}/{coronagraph}_{quartile}_noNCPA/'
-pladi_img_dir_prefix        = f'C:/Users/Red Slottje/Documents/Misthic_outputs/Planet_ADI/{star_name}/{coronagraph}_{quartile}_noNCPA/'
+adi_img_dir_prefix          = f'D:/FROM_RED/coro_adi_new/{star_name}/{coronagraph}_{quartile}_noNCPA/'
+pladi_img_dir_prefix        = f'D:/FROM_RED/planet_adi_new/{star_name}/{coronagraph}_{quartile}_noNCPA/'
+
 ### telescope pupil file, needed to normalize the input flux
-telescope_pupil_file        = 'C:/Users/Red Slottje/Documents/Misthic_inputs/PUPIL/Pupil_ELT_v02_5missing_segments_v1.fits'
-
-
+telescope_pupil_file        = directory_prefix +f'INPUT_fromNellie/PUPIL/Pupil_ELT_v03.fits'
 
 all_pl_max = []
+
+### number of images in the cube
+n_images = 4
+
+### telescope latitude, needed to calculate the parallactic angle
+tel_latitude = -24.5
+
+# Calculating parallactic angle table, one angle for each image in the cube
+ha_hours      = (np.arange(n_images) - (n_images-1.)/2. ) * frame_exp_time / 3600.
+dec_deg       = (tel_latitude - zenith_distance)
+parangle_tab  = get_parallactic_angle(ha_hours, dec_deg, tel_latitude)
+
+if not os.path.exists(parallactic_angle_dir+f'parangle_tab_{n_images}_imagespercube.txt'):
+    t = Table([parangle_tab],names=('a'))
+    t.write(parallactic_angle_dir+f'parangle_tab_{n_images}_imagespercube.txt', format='ascii')
+
+#else :
+#    parallactic_angle_dir = parallactic_angle_dir+f'parangle_tab_{n_images}_imagespercube.txt'
+
+print('parallactic angle =', parangle_tab)
 
 for i in range(len(lbd)):
     coro_sim_dir   = coro_sim_dir_prefix + f'{coronagraph}_25Hz_NEW_Lambda={lbd[i]:5.3f}/'
@@ -124,7 +149,7 @@ for i in range(len(lbd)):
 
     if coro_on == True:
         # -----------------------------------------------------------------------------
-        # If desired resizing directory 't exist, create it. If it's empty, resize the files.
+        # If desired resizing directory doesn't exist, create it. If it's empty, resize the files.
         if not os.path.exists(coro_resized_dir):
             os.makedirs(coro_resized_dir)
         file_list_coro = os.listdir(coro_resized_dir)
@@ -153,6 +178,10 @@ for i in range(len(lbd)):
             psf_cube    = fits.getdata(coro_resized_dir+'psf_cube_fft_resized.fits')            
             coro_cube   = fits.getdata(coro_resized_dir+'image_cube_fft_resized.fits')
         
+        '''perf_psf    = fits.getdata(coro_resized_dir+'perfect_psf_fft_resized.fits')            
+        psf_cube    = fits.getdata(coro_resized_dir+'psf_cube_fft_resized.fits')            
+        coro_cube   = fits.getdata(coro_resized_dir+'image_cube_fft_resized.fits')'''
+
         # Check if the ADI coro and psf images exist
         adi_img_dir = adi_img_dir_prefix + f'lbd={lbd[i]:5.3f}_pxscale={pixscale_in_mas}/'
         coro_adi_file = adi_img_dir+f'{star_name}_coro_adi_{star_mag}mag_{dist_pc}pc_{ron}e-ron_tint{frame_exp_time}sec.fits'
@@ -186,9 +215,11 @@ for i in range(len(lbd)):
            
             ### NEW ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
             # Star Spectrum
-            star_flux = get_star_spectrum(flux_dir, star_mag, lbd[i])
+            _, star_flux = get_star_spectrum(flux_dir, star_mag, lbd[i])
+            
             # Aperture Surface
             telescope_surface = get_aperture_surface(telescope_pupil_file)
+
             photon_flux, emission_per_pix, global_transmission = get_micado_flux(flux_dir, 
                                                                                  star_flux, f'{lbd[0]:5.3f}', 
                                                                                  frame_exp_time, telescope_surface, 
@@ -219,7 +250,8 @@ for i in range(len(lbd)):
             print('----------')
             print("Beginning coro ADI processing")
             # adi_sum_coro, psf_sum_coro = micado_adi(img_noise_coro, psf_noise_coro, coro_sim_dir)
-            adi_sum_coro, psf_sum_coro = micado_adi(coro_cube_noisy, psf_cube_noisy, coro_sim_dir)
+            adi_sum_coro, psf_sum_coro = micado_adi(coro_cube_noisy, psf_cube_noisy, parallactic_angle_dir+f'parangle_{n_images}_imagespercube.txt')
+            #adi_sum_coro, psf_sum_coro = micado_adi(coro_cube_noisy, psf_cube_noisy, coro_sim_dir)
         
             ### Convolution
             print('----------')
@@ -308,7 +340,7 @@ for i in range(len(lbd)):
             print("--------------------------------------------------------------------")
             
             ### check if the ADI cube exists
-            pladi_img_dir = pladi_img_dir_prefix + 'lbd={lbd[i]:5.3f}_pxscale={pixscale_in_mas}/'
+            pladi_img_dir = pladi_img_dir_prefix + f'lbd={lbd[i]:5.3f}_pxscale={pixscale_in_mas}/'
             pl_adi_file = pladi_img_dir+f'{star_name}_planet_adi_{temp}K_logg{logg}_met{met:.2f}_CO{CO:3.2f}_sep{pl_dist[j]}mas_{dist_pc}pc_{ron}e-ron_tint{frame_exp_time}sec.fits'
             plpsf_adi_file = pladi_img_dir+f'{star_name}_planet-psf_adi_{temp}K_logg{logg}_met{met:.2f}_CO{CO:3.2f}_sep{pl_dist[j]}mas_{dist_pc}pc_{ron}e-ron_tint{frame_exp_time}sec.fits'
             pl_adi_conv_file = pladi_img_dir+f'{star_name}_coro_adi_conv_{temp}K_logg{logg}_met{met:.2f}_CO{CO:3.2f}_sep{pl_dist[j]}mas_{dist_pc}pc_{ron}e-ron_tint{frame_exp_time}sec.fits'
@@ -324,7 +356,7 @@ for i in range(len(lbd)):
         
                 # Simulation directories:
                 pl_sim_dir = planet_sim_dir+'p_dist_mas={}/'.format(pl_dist[j])
-                
+                print(pl_sim_dir)
                 pl_resized_dir = planet_resized_dir+'p_dist_mas={}/'.format(pl_dist[j])
                 # If desired resizing directory doesn't exist, create it. If it's empty, resize the files.
                 if not os.path.exists(pl_resized_dir):
@@ -334,13 +366,13 @@ for i in range(len(lbd)):
                 if len(file_list_planet) == 0:
                 # If directory is empty, do planet resizing
                     perf_file_pl = glob.glob(pl_sim_dir+'*_perfect_psf.fits')
-                    perf_psf_pl = fits.getdata(pl_sim_dir+perf_file_pl)
+                    perf_psf_pl = fits.getdata(perf_file_pl[0])
                     
                     psf_file_pl = glob.glob(pl_sim_dir+'*_psf_cube.fits')
-                    cube_psf_pl = fits.getdata(pl_sim_dir+psf_file_pl)
+                    cube_psf_pl = fits.getdata(psf_file_pl[0])
                     
                     planet_file = glob.glob(pl_sim_dir+'*_image_cube.fits')
-                    planet_cube = fits.getdata(pl_sim_dir+planet_file)
+                    planet_cube = fits.getdata(planet_file[0])
                     
                     planet_cube, planet_scale_coeff_pl   = fft_resize(planet_cube, lbd[i], sampling_misthic, pixscale_in_mas, write_dir=pl_resized_dir+'image_cube_',  plotting=False)
                     cube_psf_pl, psf_scale_coeff_pl      = fft_resize(cube_psf_pl, lbd[i], sampling_misthic, pixscale_in_mas, write_dir=pl_resized_dir+'psf_cube_',    plotting=False)
@@ -434,7 +466,7 @@ for i in range(len(lbd)):
             e = [-ny/2*pixscale, nx/2*pixscale, -ny/2*pixscale, nx/2*pixscale]
             plt.imshow(conv_adi_coro+conv_adi_pl, cmap="afmhot", origin='lower', 
                        extent = e, vmin=conv_adi_coro.min()/5, vmax=conv_adi_coro.max()/5.)
-            plt.suptitle(f"{star_name}: {coronagraph} {quartile} ADI image at $\lambda$={lbd[i]:5.3f}, pxscale={pixscale_in_mas}, Mag {star_mag}",fontsize=12)
+            plt.suptitle(f"{star_name}: {coronagraph} {quartile} ADI image at lambda={lbd[i]:5.3f}, pxscale={pixscale_in_mas}, Mag {star_mag}",fontsize=12)
             plt.title('Planet: {} R_Jup, {} pc, {}K, logg={}, met={:.2f}, CO ratio={:3.2f}'.format(r_pl, dist_pc, temp, logg, met, CO),fontsize=10)
             plt.xlabel('[arcsec]')
             plt.ylabel('[arcsec]')
@@ -449,7 +481,7 @@ for i in range(len(lbd)):
             plt.plot(x, rms_contrast)#, label="Lambda={:5.3f} um".format(lbd[i]))
             plt.plot(pl_dist[j], max_planet, 'o')
             
-            plt.suptitle(f"{star_name}: {coronagraph}, {quartile} seeing, $\lambda$={lbd[i]:5.3f}um, pxscale={pixscale_in_mas}mas, Mag={star_mag}",fontsize=12)
+            plt.suptitle(f"{star_name}: {coronagraph}, {quartile} seeing, lambda={lbd[i]:5.3f}um, pxscale={pixscale_in_mas}mas, Mag={star_mag}",fontsize=12)
             plt.title(r'Planet: {} $R_J$, {} pc, {}K, logg={}, met={:.2f}, CO ratio={:3.2f}'.format(r_pl, dist_pc, temp, logg, met, CO),fontsize=10)
             plt.xlabel("Distance from center (mas)")
             plt.ylabel("Contrast, 5-sigma")
