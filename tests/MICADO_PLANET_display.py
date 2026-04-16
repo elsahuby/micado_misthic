@@ -11,8 +11,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
 from scipy import interpolate
+import sys
 import os
 from astropy import units as u
+from pathlib import Path
 import glob
 
 
@@ -24,9 +26,8 @@ from micado_misthic.analysis import get_rms_contrast
 from scipy.signal import fftconvolve
 from micado_misthic.imgproc.imgproc import rotate_frame
 
-
 #plt.style.use('seaborn-muted')
-plt.style.use('viridis')
+#plt.style.use('viridis')
 
 save_fig = True
 
@@ -34,8 +35,8 @@ tel_diam        = 38.542 #m
 lbd             = [1.19, 1.270, 1.582, 1.693, 2.100, 2.235, 1.245, 1.635, 2.145]#, 1.635, 1.693] # in um
 lbd             = [2.1] #, 1.270, 1.582, 1.693, 2.100, 2.235, 1.245, 1.635, 2.145]#, 1.635, 1.693] # in um
 
-coronograph = 'CLC1' # 'CLC0' or 'CLC1'
-quartile_tab = ['Q4', 'MED', 'Q1']
+coronograph = 'CLC0' # 'CLC0' or 'CLC1'
+quartile_tab = ['Q1', 'MED', 'Q4']
 pixscale_in_mas = 1.5
 ron = 15
 frame_exp_time=10.
@@ -62,9 +63,9 @@ met     = .32
 CO      = 0.1
 
 #%%
-
-flux_dir = '/home/ehuby/WORK/SIMU/SIMU_MICADO/INPUT/FLUX/'
-spec_dir = '/home/ehuby/WORK/SIMU/SIMU_MICADO/INPUT/Grid_BCharnay/cloud_R500/'
+# CHANGE DIRECTORY HERE
+flux_dir = 'C:/Users/Red Slottje/Documents/Misthic_inputs/Flux_input/'
+spec_dir = 'C:/Users/Red Slottje/Documents/Misthic_inputs/R500_cloudless_2025/'
 temp=temp_tab[0]
 spec_file = np.loadtxt(spec_dir+'spectra_YGP_{}K_logg{}_met{:.2f}_CO{:3.2f}.dat'.format(temp,logg,met,CO), unpack=True)
 planet_flux, spec_wave = get_planet_spectrum(spec_dir, temp, logg, met, CO, dist_pc, r_pl, flux_dir=flux_dir)
@@ -91,8 +92,9 @@ planet_params.append([800, 4.0, 0.32, 0.10, 39.4, 1])
 
 plt.figure(num=22, figsize=(6,7))
 plt.clf()
-
-telescope_surface = get_aperture_surface('/home/ehuby/WORK/SIMU/SIMU_MICADO/INPUT/PUPIL/Pupil_ELT_v02_5missing_segments_v1.fits')
+                                                                                                                                                                                                                                                                                                                                       
+# CHANGE DIRECTORY HERE
+telescope_surface = get_aperture_surface('D:/FROM_NELLIE/INPUT_fromNellie/PUPIL/Pupil_ELT_v03.fits')
 
 ls_tab=['-','-']
 a_tab =[.9,.5]
@@ -103,7 +105,7 @@ for pi,pp in enumerate(planet_params):
                                                                      planet_flux, '0', 
                                                                      frame_exp_time, telescope_surface, 
                                                                      airmass=airmass, pixel_scale=pixscale_in_mas)
-    plt.plot(spec_wave, planet_flux*planet_global_transmission, linestyle=ls_tab[pi], 
+    plt.plot(spec_wave, np.matrix.transpose(planet_flux*planet_global_transmission), linestyle=ls_tab[pi], 
              color=c_tab[pi], alpha=a_tab[pi], label=f'{pp[0]}K', linewidth=2)
 
 plt.ylim(1e3, 1e7)
@@ -142,9 +144,13 @@ for i in range(n_lbd):
     temp_tab_ = []
     
     for q,quartile in enumerate(quartile_tab) :
-        adi_img_dir = f'/home/ehuby/WORK/SIMU/SIMU_MICADO/ANALYSIS/PLANETS/{star_name}/{coronograph}_{quartile}_noNCPA/lbd={lbd[i]:5.3f}_pxscale={pixscale_in_mas}/'
+        # CHANGE DIRECTORY HERE
         
-        coro_adi_conv_file = adi_img_dir+f'{star_name}_coro_adi_conv_{star_mag}mag_{dist_pc}pc_{ron}e-ron_tint{frame_exp_time}sec.fits'
+        adi_img_dir = 'D:/FROM_NELLIE/coro_adi_new_2026/HR8799_/CLC1_Q1_noNCPA/lbd=2.100_pxscale=1.5/'
+        #adi_img_dir = f'D:/FROM_NELLIE/coro_adi_new_2026/{star_name}/{coronograph}_{quartile}_noNCPA/lbd={lbd[i]:5.3f}_pxscale={pixscale_in_mas}/'
+
+        #coro_adi_conv_file = adi_img_dir+f'{star_name}_coro_adi_conv_{star_mag}mag_{dist_pc}pc_{ron}e-ron_tint{frame_exp_time}sec.fits'
+        coro_adi_conv_file = adi_img_dir + 'HR8799__coro_adi_conv_5.24mag_39.4pc_15e-ron_tint10.0sec.fits'
         conv_adi_coro = fits.getdata(coro_adi_conv_file)
         
         psf_adi_conv_file = adi_img_dir+f'{star_name}_psf_adi_conv_{star_mag}mag_{dist_pc}pc_{ron}e-ron_tint{frame_exp_time}sec.fits'
@@ -213,7 +219,7 @@ for i in range(n_lbd):
                            #vmin=conv_adi_coro.min()/5, vmax=conv_adi_coro.max()/5.)
                            vmin = -3e4, vmax=4e5)
                 # plt.suptitle(f"{star_name}: {coronograph} {quartile} ADI image at $\lambda$={lbd[i]:5.3f}, pxscale={pixscale_in_mas}, Mag {star_mag}",fontsize=12)
-                plt.suptitle(f"{star_name}Star Mag={star_mag}, Dist={dist_pc}pc - {coronograph}, $\lambda$={lbd[i]:5.3f}um, {quartile}", fontsize=16)
+                plt.suptitle(f"{star_name}Star Mag={star_mag}, Dist={dist_pc}pc - {coronograph}, lambda={lbd[i]:5.3f}um, {quartile}", fontsize=16)
                 # plt.title(r'Planet: {} $R_J$, {} pc, {}K, logg={}, met={:.2f}, CO ratio={:3.2f}'.format(r_pl, dist_pc, temp, logg, met, CO),fontsize=10)
                 plt.title(r'Planet: R={}$R_J$, T={}K, logg={}, met={:.2f}, CO ratio={:3.2f}'.format(r_pl, temp, logg, met, CO),fontsize=14)
                 plt.xlabel('[arcsec]', fontsize=16)
@@ -224,7 +230,8 @@ for i in range(n_lbd):
                 plt.ylim(-.7,.7)
                 
                 if save_fig :
-                    save_img_dir = f'/home/ehuby/WORK/SIMU/SIMU_MICADO/ANALYSIS/PLANETS/{star_name}/{coronograph}_{quartile}_noNCPA_'
+                    # CHANGE DIRECTORY HERE
+                    save_img_dir = f'D:/FROM_NELLIE/displays/{star_name}/{coronograph}_{quartile}_noNCPA_'
                     save_file = f'lbd={lbd[i]:5.3f}_pxscale={pixscale_in_mas}_{star_name}_planet_adi_{temp}K_logg{logg}_met{met:.2f}_CO{CO:3.2f}_{dist_pc}pc_{ron}e-ron_tint{frame_exp_time}sec'
                     
                     plt.figure(num=56)
@@ -238,7 +245,7 @@ for i in range(n_lbd):
                 plt.imshow(conv_adi_coro+np.sum(all_planet_adi, axis=0), cmap="afmhot", origin='lower',  extent = e,
                            #vmin=conv_adi_coro.min()/5, vmax=conv_adi_coro.max()/5.)
                            vmin = -3e4, vmax=4e5)
-                plt.suptitle(f"{star_name}Star Mag={star_mag}, Dist={dist_pc}pc - {coronograph}, $\lambda$={lbd[i]:5.3f}um, {quartile}", fontsize=16)
+                plt.suptitle(f"{star_name}Star Mag={star_mag}, Dist={dist_pc}pc - {coronograph}, lambda={lbd[i]:5.3f}um, {quartile}", fontsize=16)
                 plt.title(r'Planet: R={}$R_J$, T={}K, logg={}, met={:.2f}, CO ratio={:3.2f}'.format(r_pl, temp, logg, met, CO),fontsize=14)
                 plt.xlabel('[arcsec]', fontsize=16)
                 plt.ylabel('[arcsec]', fontsize=16)
@@ -266,7 +273,7 @@ for i in range(n_lbd):
     
     # plt.title(f"{star_name}: {coronograph}, {quartile} seeing, $\lambda$={lbd[i]:5.3f}um, Star Mag={star_mag}",fontsize=16)
     # plt.title(r'Planet: {} $R_J$, {} pc, {}K, logg={}, met={:.2f}, CO ratio={:3.2f}'.format(r_pl, dist_pc, temp, logg, met, CO),fontsize=14)
-    ax55.set_title(f"{star_name}Star Mag={star_mag}, Dist={dist_pc}pc - {coronograph}, $\lambda$={lbd[i]:5.3f}um",fontsize=16)
+    ax55.set_title(f"{star_name}Star Mag={star_mag}, Dist={dist_pc}pc - {coronograph}, lambda={lbd[i]:5.3f}um",fontsize=16)
 
     ax55.set_xlabel("Angular separation [mas]", fontsize=16)
     ax55.set_ylabel("5-sigma Contrast", fontsize=16)
@@ -290,7 +297,10 @@ for i in range(n_lbd):
     ax55b.set_xlabel("Separation [AU]", fontsize=16, color='.4')
     
 if save_fig :
-    save_img_dir = f'/home/ehuby/WORK/SIMU/SIMU_MICADO/ANALYSIS/PLANETS/{star_name}/{coronograph}_'+'-'.join(quartile_tab)+'_noNCPA_'
+    # CHANGE DIRECTORY HERE
+    #save_img_dir = f'C:/Users/Red Slottje/Documents/Misthic_outputs/SIMUS_MICADO/PLANETS/{star_name}/{coronograph}_'+'-'.join(quartile_tab)+'_noNCPA_'
+    save_img_dir = f'D:/FROM_NELLIE/displays/{star_name}/{coronograph}_{quartile}_noNCPA_'
+
     save_file = f'lbd={lbd[i]:5.3f}_pxscale={pixscale_in_mas}_{star_name}_planet_adi_{temp}K_logg{logg}_met{met:.2f}_CO{CO:3.2f}_{dist_pc}pc_{ron}e-ron_tint{frame_exp_time}sec'
     
     plt.figure(num=55)
