@@ -69,8 +69,8 @@ config.filename     = config_current
 
 # Simulation config
 config['input_directory'] = main_path +  'INPUT/'
-config['simuconfig']['n_images'] = 1
-
+config['simuconfig']['n_images'] = 50
+config['delta_t'] = 30 
 # Simulation aberrations
 config['aberrconfig']['pre_aberr_fits'] = False
 config['aberrconfig']['pre_amp_fits']   = False
