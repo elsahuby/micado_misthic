@@ -37,7 +37,7 @@ lbd             = [2.100] #, 1.245, 1.635, 2.145]#, 1.635, 1.693] # in um
 
 ###-- Observation params
 coronagraph     = 'CLC0' # 'CLC0' or 'CLC1'
-quartile        = 'Q4'#['Q1', 'Q4', 'MED']
+quartile        = 'Q1'#['Q1', 'Q4', 'MED']
 frame_exp_time  = 10. ## exposure time per frame in seconds ### NEW
 # obs_time = 1800 # total obs time in seconds
 ron             = 15 # electrons; from FDR paper
@@ -60,6 +60,7 @@ planet_on       = True
 pl_dist = [30, 100, 200] #CLC1_H #CLC0 # in mas
 pl_dist=[15, 30, 75, 100, 125, 150, 300]
 pl_dist = [50] #, 100, 200, 500]
+pl_dist = [433.156]
 
 ###-- Star Parameters
 
@@ -82,7 +83,7 @@ zenith_distance = np.abs(-24.5 - (-9-27/60.))
 dist_pc = 3.2 # distance in parsecs
 airmass = 1. #/np.cos(zenith_distance*np.pi/180.)
 r_pl    = 1 # jupiter masses
-temp    = 500 # Kelvin
+temp    = 1500 # Kelvin
 logg    = 4.5
 met     = 1.00
 CO      = 0.5
@@ -98,21 +99,21 @@ flux_dir                    = 'C:/Users/Red Slottje/Documents/Misthic_inputs/Flu
 ### directory with simulated spectrum data
 spec_dir                    = 'C:/Users/Red Slottje/Documents/Misthic_inputs/R500_cloudless_2025/'
 ### directories with the coronagraphic simulated images
-directory_prefix                 = f'D:/FROM_NELLIE/'
+directory_prefix                 = f'D:/FROM_RED/'
 
-parallactic_angle_dir       = f'D:/FROM_RED/parallactic_angle/'
 #in the FROM_NELLIE directory coro_sims are stored in planet_sims
-coro_sim_dir_prefix         = directory_prefix+f'planet_sims/{coronagraph}_{quartile}_NoNCPA/'
+#coro_sim_dir_prefix         = directory_prefix+f'planet_sims/{coronagraph}_{quartile}_NoNCPA/'
+coro_sim_dir_prefix         = f'D:/FROM_RED/coro_sims/{coronagraph}_{quartile}_NoNCPA/'
 planet_sim_dir_prefix       = directory_prefix+f'planet_sims/{coronagraph}_{quartile}_NoNCPA/'
-coro_resized_dir_prefix     = directory_prefix+f'resized_fft/{coronagraph}_{quartile}_noNCPA/'
+coro_resized_dir_prefix     = f'D:/FROM_RED/resized_fft_coro/{coronagraph}_{quartile}_noNCPA/'
+#coro_resized_dir_prefix     = f'D:/FROM_NELLIE/resized_fft/{coronagraph}_{quartile}_noNCPA/'
 planet_resized_dir_prefix   = directory_prefix+f'resized_fft_planet/{coronagraph}_{quartile}_noNCPA/'
-
 ### directories where the resulting ADI images are saved
 adi_img_dir_prefix          = f'D:/FROM_RED/coro_adi_new/{star_name}/{coronagraph}_{quartile}_noNCPA/'
 pladi_img_dir_prefix        = f'D:/FROM_RED/planet_adi_new/{star_name}/{coronagraph}_{quartile}_noNCPA/'
 
 ### telescope pupil file, needed to normalize the input flux
-telescope_pupil_file        = directory_prefix +f'INPUT_fromNellie/PUPIL/Pupil_ELT_v03.fits'
+telescope_pupil_file        = f'D:/FROM_NELLIE/INPUT_fromNellie/PUPIL/Pupil_ELT_v03.fits'
 
 all_pl_max = []
 
@@ -123,22 +124,24 @@ n_images = 4
 tel_latitude = -24.5
 
 # Calculating parallactic angle table, one angle for each image in the cube
-ha_hours      = (np.arange(n_images) - (n_images-1.)/2. ) * frame_exp_time / 3600.
+'''ha_hours      = (np.arange(n_images) - (n_images-1.)/2. ) * frame_exp_time / 3600.
 dec_deg       = (tel_latitude - zenith_distance)
 parangle_tab  = get_parallactic_angle(ha_hours, dec_deg, tel_latitude)
 
 if not os.path.exists(parallactic_angle_dir+f'parangle_tab_{n_images}_imagespercube.txt'):
     t = Table([parangle_tab],names=('a'))
-    t.write(parallactic_angle_dir+f'parangle_tab_{n_images}_imagespercube.txt', format='ascii')
+    t.write(parallactic_angle_dir+f'parangle_tab_{n_images}_imagespercube.txt', format='ascii')'''
 
 #else :
 #    parallactic_angle_dir = parallactic_angle_dir+f'parangle_tab_{n_images}_imagespercube.txt'
 
-print('parallactic angle =', parangle_tab)
-
 for i in range(len(lbd)):
-    coro_sim_dir   = coro_sim_dir_prefix + f'{coronagraph}_25Hz_NEW_Lambda={lbd[i]:5.3f}/'
-    planet_sim_dir = planet_sim_dir_prefix+ f'lambda={lbd[i]:5.3f}/'
+    #coro_sim_dir   = coro_sim_dir_prefix + f'{coronagraph}_25Hz_NEW_Lambda={lbd[i]:5.3f}/'
+    coro_sim_dir = coro_sim_dir_prefix +f'lambda={lbd[i]:5.3f}/p_dist_mas={pl_dist[i]}/'
+    planet_sim_dir = planet_sim_dir_prefix+ f'lambda={lbd[i]:5.3f}/p_dist_mas={pl_dist[i]}'
+    parallactic_angle_dir       = coro_sim_dir_prefix+f'lambda={lbd[i]:5.3f}/p_dist_mas={pl_dist[i]}/' #lbd[i]:5.3f
+    print ('planet_sim_dir =', planet_sim_dir)
+    print('parallactic_angle_dir=', parallactic_angle_dir)
     
     coro_resized_dir = coro_resized_dir_prefix + f'lbd={lbd[i]:5.3f}_pxscale={pixscale_in_mas}/'
     planet_resized_dir = planet_resized_dir_prefix + f'lbd={lbd[i]:5.3f}_pxscale={pixscale_in_mas}/'
@@ -219,7 +222,7 @@ for i in range(len(lbd)):
             
             # Aperture Surface
             telescope_surface = get_aperture_surface(telescope_pupil_file)
-
+            print(f'lambda = {lbd[0]}')
             photon_flux, emission_per_pix, global_transmission = get_micado_flux(flux_dir, 
                                                                                  star_flux, f'{lbd[0]:5.3f}', 
                                                                                  frame_exp_time, telescope_surface, 
@@ -245,12 +248,12 @@ for i in range(len(lbd)):
             # fig22, ax22 = plt.subplots(nrow=1, ncols=2, sharey=True, sharex=True, num=22)
             # ax22[0].imshow(psf_cube_noisy[0])
             # ax22[1].imshow(coro_cube_noisy[0])
-            
+           
             ### ADI
             print('----------')
             print("Beginning coro ADI processing")
             # adi_sum_coro, psf_sum_coro = micado_adi(img_noise_coro, psf_noise_coro, coro_sim_dir)
-            adi_sum_coro, psf_sum_coro = micado_adi(coro_cube_noisy, psf_cube_noisy, parallactic_angle_dir+f'parangle_tab_{n_images}_imagespercube.txt')
+            adi_sum_coro, psf_sum_coro = micado_adi(coro_cube_noisy, psf_cube_noisy, parallactic_angle_dir)
             #adi_sum_coro, psf_sum_coro = micado_adi(coro_cube_noisy, psf_cube_noisy, coro_sim_dir)
         
             ### Convolution
