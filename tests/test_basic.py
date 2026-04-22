@@ -22,10 +22,10 @@ from configobj import ConfigObj
 from validate import Validator
 
 ## path tristan
-main_path = '/Users/tristandeseine/Desktop/ETUDE/stage/2025:2026/LIRA/EXOPLANET/TRAVAUX STAGE /MISTHIC/'
+tristan_main_path = 'C:/Users/tdeseine/Desktop/MISTHIC/'
 
 ## PARAMETER FILE: CORO CONFIG
-paf_directory     =main_path +  'micado_misthic/tests/config_files/'
+paf_directory     =tristan_main_path +  'micado_misthic/tests/config_files/'
 
 # put the specific config file you need here
 config_file = "misthic_config_micado_CLC0"
@@ -39,7 +39,7 @@ print('\n --- '+pf+' ---')
 
 ###### USER defined Params ###########################################################
 ind_coro = pf.find('micado_') + len('micado_')
-output_directory = main_path + 'output/'+pf[ind_coro:]+'/'
+output_directory = tristan_main_path + 'output/'+pf[ind_coro:]+'/'
 checking_plots = True
 wave_name = 'J-mono'
 
@@ -68,7 +68,7 @@ config_current      = pf+"_current.ini"
 config.filename     = config_current
 
 # Simulation config
-config['input_directory'] = main_path +  'INPUT/'
+config['input_directory'] = tristan_main_path +  'INPUT/'
 config['simuconfig']['n_images'] = 50
 config['delta_t'] = 30 
 # Simulation aberrations
