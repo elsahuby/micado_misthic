@@ -1,6 +1,13 @@
 import sys
 from pathlib import Path
 import numpy as np
+import time
+from datetime import datetime
+
+
+from micado_misthic.utils.obsparams import *
+from configobj import ConfigObj
+
 
 from PyQt6.QtWidgets import (
     QApplication,
@@ -18,7 +25,8 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QTabWidget,
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QLocale
+from PyQt6.QtGui import QDoubleValidator
 
 import matplotlib
 matplotlib.use('QtAgg')
@@ -36,8 +44,11 @@ class InputParametersWindow(QWidget):
         self.resize(1080, 700)
 
         self.base_folder = Path("C:/...")
+        self.flux_folder = None
         self.last_adi_sum = None
         self.last_psf_sum = None
+        self.last_output_dir = None
+        self.last_params_slug = None
 
         self.init_ui()
         self.update_paths()
@@ -77,34 +88,31 @@ class InputParametersWindow(QWidget):
 
         left_layout.addLayout(folder_layout)
 
-        # Formulaire
-        form_layout = QGridLayout()
-        form_layout.setHorizontalSpacing(15)
-        form_layout.setVerticalSpacing(12)
-
-        # CLC
+        # Formulaire divisé en onglets : Instrument / Scene
+        # Préparer les contrôles : tout dans Instrument, seulement Seeing dans Scene
         self.clc_combo = QComboBox()
         self.clc_combo.addItems(["CLC0", "CLC1", "CLC2"])
-        form_layout.addWidget(QLabel("CLC:"), 0, 0)
-        form_layout.addWidget(self.clc_combo, 0, 1)
 
-        # NCPA
         self.ncpa_combo = QComboBox()
         self.ncpa_combo.addItems(["Yes", "No"])
-        form_layout.addWidget(QLabel("NCPA:"), 1, 0)
-        form_layout.addWidget(self.ncpa_combo, 1, 1)
 
-        # Seeing
         self.seeing_combo = QComboBox()
         self.seeing_combo.addItems(["Q1", "MED", "Q4"])
-        form_layout.addWidget(QLabel("Seeing:"), 2, 0)
-        form_layout.addWidget(self.seeing_combo, 2, 1)
 
-        # Sampling (affiché avant Filter/Wavelength)
+        # Scene-specific magnitude input (real number between 0 and 15)
+        self.magnitude_combo = QLineEdit()
+        self.magnitude_combo.setPlaceholderText("0.00 - 15.00")
+        magnitude_validator = QDoubleValidator(0.0, 15.0, 3, self.magnitude_combo)
+        magnitude_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
+        magnitude_validator.setLocale(QLocale(QLocale.Language.C))
+        self.magnitude_combo.setValidator(magnitude_validator)
+
+        # Flux folder label (auto-detected)
+        self.flux_folder_label = QLabel("Flux folder: not selected")
+        self.flux_folder_label.setStyleSheet("color: #444;")
+
         self.sampling_combo = QComboBox()
         self.sampling_combo.addItems(["1.5", "4.0"])
-        form_layout.addWidget(QLabel("Sampling:"), 3, 0)
-        form_layout.addWidget(self.sampling_combo, 3, 1)
 
         # Filter + wavelength ensemble
         self.filter_wavelength_map = {
@@ -116,10 +124,46 @@ class InputParametersWindow(QWidget):
         for filt, wavelengths in self.filter_wavelength_map.items():
             for wavelength in wavelengths:
                 self.filter_wavelength_combo.addItem(f"{filt} - {wavelength}", (filt, wavelength))
-        form_layout.addWidget(QLabel("Filter / Wavelength:"), 4, 0)
-        form_layout.addWidget(self.filter_wavelength_combo, 4, 1)
 
-        left_layout.addLayout(form_layout)
+        # Detection noise (déplacé dans l'onglet Instrument)
+        self.dark_checkbox = QComboBox()
+        self.dark_checkbox.addItems(["No", "Yes"])
+
+        # Création des onglets pour les input parameters
+        self.input_tabs = QTabWidget()
+
+        # Instrument tab (contient tous les contrôles)
+        instrument_tab = QWidget()
+        instrument_layout = QGridLayout(instrument_tab)
+        instrument_layout.setHorizontalSpacing(12)
+        instrument_layout.setVerticalSpacing(8)
+        instrument_layout.addWidget(QLabel("CLC:"), 0, 0)
+        instrument_layout.addWidget(self.clc_combo, 0, 1)
+        instrument_layout.addWidget(QLabel("NCPA:"), 1, 0)
+        instrument_layout.addWidget(self.ncpa_combo, 1, 1)
+        instrument_layout.addWidget(QLabel("Sampling:"), 2, 0)
+        instrument_layout.addWidget(self.sampling_combo, 2, 1)
+        instrument_layout.addWidget(QLabel("Filter / Wavelength:"), 3, 0)
+        instrument_layout.addWidget(self.filter_wavelength_combo, 3, 1)
+        instrument_layout.addWidget(QLabel("Detection noise:"), 4, 0)
+        instrument_layout.addWidget(self.dark_checkbox, 4, 1)
+
+        # Scene tab (only scene-specific parameter)
+        scene_tab = QWidget()
+        scene_layout = QGridLayout(scene_tab)
+        scene_layout.setHorizontalSpacing(12)
+        scene_layout.setVerticalSpacing(8)
+        scene_layout.addWidget(QLabel("Seeing:"), 0, 0)
+        scene_layout.addWidget(self.seeing_combo, 0, 1)
+        scene_layout.addWidget(QLabel("Magnitude:"), 1, 0)
+        scene_layout.addWidget(self.magnitude_combo, 1, 1)
+        scene_layout.addWidget(QLabel("Flux folder:"), 2, 0)
+        scene_layout.addWidget(self.flux_folder_label, 2, 1)
+
+        self.input_tabs.addTab(instrument_tab, "Instrument")
+        self.input_tabs.addTab(scene_tab, "Scene")
+
+        left_layout.addWidget(self.input_tabs)
 
         # Affichage du chemin final
         self.path_box = QTextEdit()
@@ -150,9 +194,6 @@ class InputParametersWindow(QWidget):
         post_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         left_layout.addWidget(post_title)
 
-        self.dark_checkbox = QComboBox()
-        self.dark_checkbox.addItems(["No", "Yes"])
-
         self.adi_checkbox = QComboBox()
         self.adi_checkbox.addItems(["No", "Yes"])
         self.adi_checkbox.currentTextChanged.connect(self.on_adi_changed)
@@ -177,14 +218,12 @@ class InputParametersWindow(QWidget):
         self.plot_contrast_button.setStyleSheet("background-color: #4caf50; color: white; border-radius: 4px;")
 
         post_layout = QGridLayout()
-        post_layout.addWidget(QLabel("Detection noise:"), 0, 0)
-        post_layout.addWidget(self.dark_checkbox, 0, 1)
-        post_layout.addWidget(QLabel("ADI:"), 1, 0)
-        post_layout.addWidget(self.adi_checkbox, 1, 1)
-        post_layout.addWidget(QLabel("Save ADI:"), 2, 0)
-        post_layout.addWidget(self.save_adi_checkbox, 2, 1)
-        post_layout.addWidget(QLabel("Save folder:"), 3, 0)
-        post_layout.addWidget(self.save_folder_button, 3, 1)
+        post_layout.addWidget(QLabel("ADI:"), 0, 0)
+        post_layout.addWidget(self.adi_checkbox, 0, 1)
+        post_layout.addWidget(QLabel("Save ADI:"), 1, 0)
+        post_layout.addWidget(self.save_adi_checkbox, 1, 1)
+        post_layout.addWidget(QLabel("Save folder:"), 2, 0)
+        post_layout.addWidget(self.save_folder_button, 2, 1)
         left_layout.addLayout(post_layout)
         left_layout.addWidget(self.save_folder_label)
         left_layout.addWidget(self.plot_contrast_button)
@@ -247,7 +286,7 @@ class InputParametersWindow(QWidget):
         right_layout.addWidget(self.tab_widget)
 
         # Text output section
-        files_title = QLabel("Fichiers / Préprocessing")
+        files_title = QLabel("Files / Preprocessing")
         files_title.setStyleSheet("""
             font-size: 16px;
             font-weight: bold;
@@ -256,7 +295,7 @@ class InputParametersWindow(QWidget):
 
         self.files_box = QTextEdit()
         self.files_box.setReadOnly(True)
-        self.files_box.setPlaceholderText("Espace réservé pour les fichiers avant ou après le preprocessing.")
+        self.files_box.setPlaceholderText("")
         self.files_box.setStyleSheet("""
             QTextEdit {
                 background-color: #f6f6f6;
@@ -265,7 +304,7 @@ class InputParametersWindow(QWidget):
                 font-size: 13px;
             }
         """)
-        self.files_box.setMaximumHeight(120)
+        self.files_box.setMaximumHeight(80)
         right_layout.addWidget(self.files_box)
 
         main_layout.addWidget(right_frame, 1)
@@ -287,7 +326,192 @@ class InputParametersWindow(QWidget):
         if folder:
             self.base_folder = Path(folder)
             self.folder_label.setText(f"Base folder: {folder}")
+            self.auto_detect_flux_folder()
             self.update_paths()
+
+    def auto_detect_flux_folder(self):
+        """Automatically detect Flux_input folder inside base_folder."""
+        flux_path = self.base_folder / "Flux_input"
+        
+        if flux_path.exists() and flux_path.is_dir():
+            self.flux_folder = flux_path
+            self.flux_folder_label.setText(f"Flux folder: {flux_path}")
+        else:
+            # If not found, set to None and show message
+            self.flux_folder = None
+            self.flux_folder_label.setText("Flux folder: not found")
+
+    def get_selected_magnitude(self):
+        magnitude = self.magnitude_combo.text().strip()
+        return magnitude if magnitude else None
+
+    def get_flux_folder(self):
+        return self.flux_folder if self.flux_folder and self.flux_folder.exists() else None
+    
+    def get_star_spectrum(self, star_mag=None, wavelength=None, display_plot=False):
+        """
+        Get the star spectrum using the selected magnitude, wavelength, and flux folder.
+        
+        Parameters
+        ----------
+        star_mag : float or str, optional
+            Star magnitude. If None, uses get_selected_magnitude().
+        wavelength : float or str, optional
+            Wavelength in micrometers. If None, uses the selected filter wavelength.
+        display_plot : bool, optional
+            Whether to display the spectrum plot. Default is False.
+        
+        Returns
+        -------
+        tuple
+            (wavelengths, star_flux) - wavelengths in micrometers and star flux spectrum
+        
+        Raises
+        ------
+        FileNotFoundError
+            If flux folder is not found.
+        ValueError
+            If star magnitude or wavelength is invalid or not provided.
+        """
+        if self.flux_folder is None:
+            raise FileNotFoundError("Flux folder not found. Please select a valid base folder containing 'Flux_input'.")
+        
+        # Get magnitude if not provided
+        if star_mag is None:
+            mag_text = self.get_selected_magnitude()
+            if mag_text is None:
+                raise ValueError("No star magnitude selected.")
+            try:
+                star_mag = float(mag_text)
+            except ValueError:
+                raise ValueError(f"Invalid magnitude value: {mag_text}")
+        else:
+            try:
+                star_mag = float(star_mag)
+            except (ValueError, TypeError):
+                raise ValueError(f"Invalid magnitude value: {star_mag}")
+
+        # Determine wavelength if not provided
+        if wavelength is None:
+            data = self.filter_wavelength_combo.currentData()
+            if data is None and self.filter_wavelength_combo.count() > 0:
+                self.filter_wavelength_combo.setCurrentIndex(0)
+                data = self.filter_wavelength_combo.currentData()
+            if data is None:
+                raise ValueError("No wavelength selected for star spectrum.")
+            _, wavelength = data
+
+        try:
+            wavelength_value = float(str(wavelength).replace('µm', '').replace('um', '').strip())
+        except Exception:
+            raise ValueError(f"Invalid wavelength value: {wavelength}")
+
+        # Convert flux_folder Path to string with trailing slash for obsparams compatibility
+        flux_dir = str(self.flux_folder) + "\\" if isinstance(self.flux_folder, Path) else self.flux_folder
+        
+        # Call the obsparams function to get the star spectrum
+        try:
+            wave_tr, star_flux = get_star_spectrum(flux_dir, star_mag, wavelength_value, display_plot=display_plot)
+            return wave_tr, star_flux
+        except Exception as e:
+            raise RuntimeError(f"Error computing star spectrum: {e}")
+        
+    def get_aperture_surface(self, telescope_pupil_file=None):
+        telescope_pupil_file = self.base_folder / "PUPIL/Pupil_ELT_v03.fits'"
+        from micado_misthic.utils.obsparams import get_aperture_surface
+        return get_aperture_surface(telescope_pupil_file)
+
+    def get_micado_flux(self, delta_t, zenith_distance, flux_dir=None, star_flux=None, wavelength=None, path=None):
+        """Wrapper around `micado_misthic.utils.obsparams.get_micado_flux`.
+
+        Returns (photon_flux, emission_per_pix, trans_out).
+        """
+        # Determine flux_dir
+        if flux_dir is None:
+            if self.flux_folder is None:
+                raise FileNotFoundError("Flux folder not found. Please select a valid base folder containing 'Flux_input'.")
+            flux_dir = str(self.flux_folder) + "\\"
+
+        # Read config parameters
+        key_values = self.read_config_values_from_path(path, "simuconfig", ["delta_t", "zenith_distance"])
+        
+
+        # Prepare the spectrum: accept an array or call get_star_spectrum
+        if star_flux is None:
+            wave_tr, star_flux = self.get_star_spectrum(star_mag=None, wavelength=wavelength, display_plot=False)
+        
+
+        # Determine wavelength (um) if not provided
+        if wavelength is None:
+            data = self.filter_wavelength_combo.currentData()
+            if data is None and self.filter_wavelength_combo.count() > 0:
+                self.filter_wavelength_combo.setCurrentIndex(0)
+                data = self.filter_wavelength_combo.currentData()
+            if data is None:
+                raise ValueError("No wavelength selected for get_micado_flux.")
+            _, wavelength = data
+
+        try:
+            wavelength_value = float(str(wavelength).replace('µm', '').replace('um', '').strip())
+        except Exception:
+            raise ValueError(f"Invalid wavelength value: {wavelength}")
+
+        filter_type = f"{wavelength_value:5.3f}"
+
+        pixel_scale = float(self.sampling_combo.currentText())
+
+
+        
+        frame_exp_time = np.float32(delta_t)
+       
+        airmass = 1/np.cos(np.radians(zenith_distance))
+
+        # Aperture surface: try reading pupil file under base_folder/PUPIL
+        pupil_file = self.base_folder / "PUPIL" / "Pupil_ELT_v03.fits"
+        
+        aperture_surface = get_aperture_surface(str(pupil_file))
+        
+
+        # Call obsparams.get_micado_flux
+        
+        photon_flux, emission_per_pix, global_transmission = get_micado_flux(flux_dir, star_flux, filter_type, frame_exp_time, aperture_surface, airmass=airmass, pixel_scale=pixel_scale)
+
+        return photon_flux, emission_per_pix, global_transmission
+    
+    def scale_to_photon(self, img_cube, perf_psf, photon_flux, emission_per_pix, frame_exp_time, sig_ron=15., no_noise=False):
+        """
+        Wrapper around obsparams.scale_to_photons to convert image levels to photons with noise.
+        
+        Parameters
+        ----------
+        img_cube : ndarray
+            Image cube to scale (coronagraphic or target image)
+        perf_psf : ndarray
+            Performance PSF
+        photon_flux : float
+            Photon flux
+        emission_per_pix : float
+            Emission per pixel
+        frame_exp_time : float
+            Frame exposure time
+        sig_ron : float, optional
+            Readout noise sigma. Default is 15.
+        no_noise : bool, optional
+            If True, no noise is added. Default is False.
+        
+        Returns
+        -------
+        tuple
+            (img_cube_noisy, perf_psf_noisy, flux_per_frame)
+        """
+        from micado_misthic.utils.obsparams import scale_to_photons
+        
+        img_cube_noisy, perf_psf_noisy, flux_per_frame = scale_to_photons(
+            img_cube, perf_psf, photon_flux, emission_per_pix,
+            frame_exp_time, sig_ron=sig_ron, no_noise=no_noise, silent=True
+        )
+        
+        return img_cube_noisy, perf_psf_noisy, flux_per_frame
 
     def update_filter_wavelength_options(self):
         sampling = self.sampling_combo.currentText()
@@ -322,11 +546,11 @@ class InputParametersWindow(QWidget):
         self.adi_enabled = text == "Yes"
         if self.adi_enabled:
             self.files_box.setPlaceholderText(
-                "ADI activé : le traitement ADI sera exécuté au Run sur le chemin sélectionné."
+                "ADI enabled: ADI processing will run on the selected path."
             )
         else:
             self.files_box.setPlaceholderText(
-                "Espace réservé pour les fichiers avant ou après le preprocessing."
+                ""
             )
         self.update_save_controls()
 
@@ -338,73 +562,297 @@ class InputParametersWindow(QWidget):
             self.save_folder_label.setText("No save folder selected")
 
     def choose_save_root_folder(self):
-        folder = QFileDialog.getExistingDirectory(self, "Choisir le dossier de sauvegarde ADI")
+        folder = QFileDialog.getExistingDirectory(self, "Choose ADI save folder")
         if not folder:
             return
         self.save_root = Path(folder)
         self.save_folder_label.setText(str(self.save_root))
 
-    def perform_adi_processing(self, path, save_root=None):
+
+    def get_parameter_values(self):
+        data = self.filter_wavelength_combo.currentData()
+        if data is None and self.filter_wavelength_combo.count() > 0:
+            self.filter_wavelength_combo.setCurrentIndex(0)
+            data = self.filter_wavelength_combo.currentData()
+
+        filt, wavelength = data if data is not None else ("H", "1.582 Âµm")
+        wavelength_value = str(wavelength).replace(" ", "").replace("Âµm", "um")
+
+        return {
+            "clc": self.clc_combo.currentText(),
+            "ncpa": "NCPA" if self.ncpa_combo.currentText() == "Yes" else "NoNCPA",
+            "seeing": self.seeing_combo.currentText(),
+            "filter": filt,
+            "wavelength": wavelength_value,
+            "sampling": self.sampling_combo.currentText(),
+            "magnitude": self.get_selected_magnitude(),
+            "noise": "noise" if self.dark_checkbox.currentText() == "Yes" else "no_noise",
+        }
+
+    def build_params_slug(self):
+        params = self.get_parameter_values()
+        slug_parts = [
+            params["clc"],
+            params["ncpa"],
+            params["seeing"],
+            f"{params['filter']}{params['wavelength']}",
+            f"samp{params['sampling']}",
+        ]
+        if params["magnitude"]:
+            slug_parts.append(f"mag{params['magnitude']}")
+        slug_parts.append(params["noise"])
+        raw_slug = "_".join(slug_parts)
+        return "".join(
+            char if char.isascii() and (char.isalnum() or char in "._-") else "_"
+            for char in raw_slug
+        )
+
+    def write_ds9_fits(self, path, data):
+        from astropy.io import fits
+
+        image = np.asarray(data, dtype=np.float32)
+        fits.PrimaryHDU(image).writeto(path, overwrite=True)
+
+    def build_simulation_output_dir(self, save_root):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        params_slug = self.build_params_slug()
+        output_dir = Path(save_root) / timestamp
+        output_dir.mkdir(parents=True, exist_ok=True)
+        self.last_output_dir = output_dir
+        self.last_params_slug = params_slug
+        return output_dir
+
+    def save_noise_inputs(self, output_dir, original_cube, processed_cube, original_psf, processed_psf):
+        noise_dir = Path(output_dir) / "noisy_images"
+        noise_dir.mkdir(parents=True, exist_ok=True)
+        params_slug = self.last_params_slug or self.build_params_slug()
+
+        paths = [
+            noise_dir / f"{params_slug}_image_cube_original.fits",
+            noise_dir / f"{params_slug}_image_cube_noise.fits",
+            noise_dir / f"{params_slug}_psf_cube_original.fits",
+            noise_dir / f"{params_slug}_psf_cube_noise.fits",
+        ]
+
+        self.write_ds9_fits(paths[0], original_cube)
+        self.write_ds9_fits(paths[1], processed_cube)
+        self.write_ds9_fits(paths[2], original_psf)
+        self.write_ds9_fits(paths[3], processed_psf)
+
+        self.files_box.append(
+            "Noise inputs saved:\n"
+            f"- {paths[0]}\n"
+            f"- {paths[1]}\n"
+            f"- {paths[2]}\n"
+            f"- {paths[3]}"
+        )
+
+
+    def read_config_values_from_path(self, path, section_name, keys):
+        """
+        Lit un fichier *_misthic_config_test.ini dans le dossier donné
+        et récupère une ou plusieurs valeurs dans une section donnée.
+
+        Parameters
+        ----------
+        path : str or Path
+            Dossier contenant le fichier .ini.
+        section_name : str
+            Nom de la section, par exemple "simuconfig".
+        keys : str or list[str]
+            Clé ou liste de clés à récupérer.
+
+        Returns
+        -------
+        value or dict or None
+            - Si keys est une string : retourne directement la valeur.
+            - Si keys est une liste : retourne un dictionnaire {clé: valeur}.
+            - Retourne None en cas d'erreur.
+        """
+
+        path = Path(path)
+
+        config_files = list(path.glob("*_misthic_config_test.ini"))
+
+        if not config_files:
+            self.files_box.append(
+                "Warning: Config file (*_misthic_config_test.ini) not found in path."
+            )
+            return None
+
+        config_file = config_files[0]
+
+        try:
+            config = ConfigObj(str(config_file))
+
+            if section_name not in config:
+                self.files_box.append(
+                    f"Warning: section [{section_name}] not found in {config_file.name}."
+                )
+                return None
+
+            section = config[section_name]
+
+            # Cas où on demande une seule clé
+            if isinstance(keys, str):
+                value = section.get(keys)
+
+                if value is None:
+                    self.files_box.append(
+                        f"Warning: {keys} not found in [{section_name}]."
+                    )
+                    return None
+
+                self.files_box.append(
+                    f"Config loaded from {config_file.name}: "
+                    f"[{section_name}] {keys}={value}"
+                )
+
+                return value
+
+            # Cas où on demande plusieurs clés
+            values = {}
+
+            for key in keys:
+                value = section.get(key)
+
+                if value is None:
+                    self.files_box.append(
+                        f"Warning: {key} not found in [{section_name}]."
+                    )
+                else:
+                    values[key] = value
+
+            self.files_box.append(
+                f"Config loaded from {config_file.name}: "
+                f"[{section_name}] {values}"
+            )
+
+            return values
+
+        except Exception as e:
+            self.files_box.append(
+                f"Error reading config file {config_file.name}: {str(e)}"
+            )
+            return None
+
+    def perform_adi_processing(self, path, save_root=None, apply_noise=False):
         from micado_misthic.imgproc import micado_adi
         from astropy.io import fits
 
         cube_file = None
         psf_cube_file = None
+        perf_psf_file = None
 
         for files in Path(path).glob("*.fits"):
             if "image_cube" in files.name:
                 cube_file = files
             elif "psf_cube" in files.name:
                 psf_cube_file = files
+            elif "perfect_psf" in files.name:
+                perf_psf_file = files
 
         if cube_file is None or psf_cube_file is None:
             QMessageBox.warning(
                 self,
-                "Fichiers ADI incomplets",
-                "Impossible de trouver les fichiers image_cube ou psf_cube dans le dossier sélectionné.",
+                "Incomplete ADI files",
+                "Could not find image_cube or psf_cube files in the selected folder.",
             )
             return
 
-        print(f"Processing ADI on {cube_file} and {psf_cube_file}")
-        
+        if apply_noise and perf_psf_file is None:
+            QMessageBox.warning(
+                self,
+                "Incomplete noise files",
+                "Could not find perfect_psf file in the selected folder. Noise cannot be applied.",
+            )
+            return
+
+        self.files_box.append(f"Starting ADI processing on: {cube_file.name} and {psf_cube_file.name}...")
+        QApplication.processEvents()
+        start_time = time.time()
+
         # Load FITS data before calling micado_adi
         cube_data = fits.getdata(str(cube_file))
         psf_cube_data = fits.getdata(str(psf_cube_file))
-        
-        adi_sum, psf_sum = micado_adi(cube_data, psf_cube_data, str(path) + "\\")
+        perf_psf_data = fits.getdata(str(perf_psf_file)) if perf_psf_file is not None else None
+        original_cube_data = cube_data.copy()
+        original_psf_cube_data = psf_cube_data.copy()
+        noise_applied = False
 
         if save_root is None and self.save_adi_checkbox.currentText() == "Yes":
             self.choose_save_root_folder()
             save_root = self.save_root
 
+        output_dir = None
         if self.save_adi_checkbox.currentText() == "Yes" and save_root is not None:
-            output_dir = self.build_adi_output_dir(save_root, path)
-            self.save_adi_results(adi_sum, psf_sum, output_dir, cube_file, psf_cube_file)
+            output_dir = self.build_simulation_output_dir(save_root)
+
+        # Apply noise if requested
+        if apply_noise:
+            key_values = self.read_config_values_from_path(path, "simuconfig", ["delta_t", "zenith_distance"])
+            if key_values is None:
+                self.files_box.append("Warning: Could not read config file. Skipping noise application.")
+                key_values = {}
+
+            delta_t = key_values.get("delta_t")
+            zenith_distance = key_values.get("zenith_distance")
+
+            if delta_t is None or zenith_distance is None:
+                self.files_box.append("Warning: Could not find delta_t or zenith_distance in config file. Skipping noise application.")
+            else:
+                try:
+                    zenith_distance = np.float32(zenith_distance)
+                    # Get photon flux and emission data
+                    photon_flux, emission_per_pix, _ = self.get_micado_flux(path=path, delta_t=delta_t, zenith_distance=zenith_distance)
+                    frame_exp_time = np.float32(delta_t)
+                    
+                    # Scale image and PSF cubes to photons with noise.
+                    self.files_box.append("Creating image and PSF cubes with photon noise...")
+                    image_cube_noise, _, _ = self.scale_to_photon(
+                        cube_data, perf_psf_data, photon_flux, emission_per_pix, 
+                        frame_exp_time, sig_ron=15., no_noise=False
+                    )
+                    psf_cube_noise, _, _ = self.scale_to_photon(
+                        psf_cube_data, perf_psf_data, photon_flux, emission_per_pix,
+                        frame_exp_time, sig_ron=15., no_noise=False
+                    )
+                    cube_data = image_cube_noise
+                    psf_cube_data = psf_cube_noise
+                    noise_applied = True
+                    self.files_box.append(f"Applied photon noise scaling with delta_t={delta_t}s")
+                except Exception as e:
+                    self.files_box.append(f"Warning: Could not apply noise scaling: {str(e)}")
+                    # Continue with unnoisy data
+
+        adi_sum, psf_sum = micado_adi(cube_data, psf_cube_data, str(path) + "\\")
+
+        if output_dir is not None:
+            if noise_applied:
+                self.save_noise_inputs(
+                    output_dir,
+                    original_cube_data,
+                    cube_data,
+                    original_psf_cube_data,
+                    psf_cube_data,
+                )
+            self.save_adi_results(adi_sum, psf_sum, output_dir)
 
         self.last_adi_sum = adi_sum
         self.last_psf_sum = psf_sum
+        elapsed = time.time() - start_time
+        self.files_box.append(f"ADI processing completed in {elapsed:.1f} s.")
 
-    def build_adi_output_dir(self, save_root, selected_path):
-        try:
-            relative_path = Path(selected_path).relative_to(self.base_folder)
-        except ValueError:
-            relative_path = Path(selected_path).name
-
-        output_dir = Path(save_root) / "ADI" / relative_path
-        output_dir.mkdir(parents=True, exist_ok=True)
-        return output_dir
-
-    def save_adi_results(self, adi_sum, psf_sum, output_dir, cube_file=None, psf_cube_file=None):
+    def save_adi_results(self, adi_sum, psf_sum, output_dir):
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
+        params_slug = self.last_params_slug or self.build_params_slug()
 
-        adi_sum_path = output_dir / f"adi_sum_{cube_file.stem if cube_file else 'result'}.fits"
-        psf_sum_path = output_dir / f"adi_psf_{psf_cube_file.stem if psf_cube_file else 'result'}.fits"
+        adi_sum_path = output_dir / f"{params_slug}_adi_sum.fits"
+        psf_sum_path = output_dir / f"{params_slug}_adi_psf_sum.fits"
 
-        from astropy.io import fits
-
-        fits.writeto(adi_sum_path, adi_sum, overwrite=True)
-        fits.writeto(psf_sum_path, psf_sum, overwrite=True)
+        self.write_ds9_fits(adi_sum_path, adi_sum)
+        self.write_ds9_fits(psf_sum_path, psf_sum)
 
         self.files_box.append(
             f"ADI results saved:\n- {adi_sum_path}\n- {psf_sum_path}"
@@ -431,11 +879,14 @@ class InputParametersWindow(QWidget):
             QMessageBox.information(
                 self,
                 "Contrast curve unavailable",
-                "Aucune image ADI n'a encore été générée. Lancez d'abord le traitement ADI, puis cliquez sur le bouton de tracé.",
+                "No ADI image has been generated yet. Run ADI processing first, then click the plot button.",
             )
             return
-
         from micado_misthic.analysis import get_rms_contrast
+
+        self.files_box.append("Starting contrast curve generation...")
+        QApplication.processEvents()
+        start_time = time.time()
 
         sampling = self.sampling_combo.currentText()
         pxscale = float(sampling)
@@ -447,17 +898,50 @@ class InputParametersWindow(QWidget):
 
         x = x * pxscale
         self.display_contrast_curve(x, rms_contrast)
+        if self.last_output_dir is not None:
+            self.save_contrast_curve(x, rms_contrast, self.last_output_dir)
         self.tab_widget.setCurrentIndex(1)
-        self.files_box.append("Courbe de contraste générée.")
+        elapsed = time.time() - start_time
+        self.files_box.append(f"Contrast curve generated in {elapsed:.1f} s.")
+
+    def save_contrast_curve(self, x, contrast, output_dir):
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        params_slug = self.last_params_slug or self.build_params_slug()
+
+        table_path = output_dir / f"{params_slug}_contrast_curve.txt"
+        figure_path = output_dir / f"{params_slug}_contrast_curve.png"
+
+        np.savetxt(
+            table_path,
+            np.column_stack((x, contrast)),
+            header="separation_mas contrast_5sigma",
+        )
+
+        export_figure = Figure(figsize=(8, 5), dpi=150)
+        ax = export_figure.add_subplot(111)
+        ax.plot(x, contrast, color="#a24814", linewidth=1.8)
+        ax.set_title('5-sigma contrast curve', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Angular separation (mas)')
+        ax.set_ylabel('Contrast, 5-sigma')
+        ax.set_yscale('log')
+        ax.grid(color='.9')
+        ax.set_xlim(left=0)
+        export_figure.tight_layout()
+        export_figure.savefig(figure_path, dpi=150)
+
+        self.files_box.append(
+            f"Contrast curve saved:\n- {table_path}\n- {figure_path}"
+        )
 
     def display_contrast_curve(self, x, contrast):
         self.contrast_figure.clear()
 
         ax = self.contrast_figure.add_subplot(111)
         ax.plot(x, contrast, color="#a24814", linewidth=1.8)
-        ax.set_title('Courbe de contraste 5-sigma', fontsize=14, fontweight='bold')
-        ax.set_xlabel('Distance du centre (mas)')
-        ax.set_ylabel('Contraste, 5-sigma')
+        ax.set_title('5-sigma contrast curve', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Angular separation (mas)')
+        ax.set_ylabel('Contrast, 5-sigma')
         ax.set_yscale('log')
         ax.grid(color='.9')
         ax.set_xlim(left=0)
@@ -536,7 +1020,8 @@ class InputParametersWindow(QWidget):
         save_root = self.save_root if self.save_adi_checkbox.currentText() == "Yes" else None
 
         if adi == "Yes":
-            self.perform_adi_processing(final_path, save_root=save_root)
+            apply_noise = dark_noise == "Yes"
+            self.perform_adi_processing(final_path, save_root=save_root, apply_noise=apply_noise)
 
 
 if __name__ == "__main__":
