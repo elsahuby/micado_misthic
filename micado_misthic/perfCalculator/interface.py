@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QComboBox,
+    QCheckBox,
     QPushButton,
     QFileDialog,
     QMessageBox,
@@ -90,8 +91,13 @@ class InputParametersWindow(QWidget):
 
         # Formulaire divisé en onglets : Instrument / Scene
         # Préparer les contrôles : tout dans Instrument, seulement Seeing dans Scene
+        self.clc_legacy_folder_map = {
+            "CLC15": "CLC0",
+            "CLC25": "CLC1",
+            "CLC50": "CLC2",
+        }
         self.clc_combo = QComboBox()
-        self.clc_combo.addItems(["CLC0", "CLC1", "CLC2"])
+        self.clc_combo.addItems(["CLC15", "CLC25", "CLC50"])
 
         self.ncpa_combo = QComboBox()
         self.ncpa_combo.addItems(["Yes", "No"])
@@ -106,6 +112,25 @@ class InputParametersWindow(QWidget):
         magnitude_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
         magnitude_validator.setLocale(QLocale(QLocale.Language.C))
         self.magnitude_combo.setValidator(magnitude_validator)
+
+        # Planet-specific inputs 
+        self.planet_on_checkbox = QCheckBox("Planet on")
+        self.planet_on_checkbox.setChecked(False)
+
+        #distance to the star in mas
+        self.Distance_combo = QComboBox()
+        self.Distance_combo.addItems([
+            "15 mas", "30 mas", "50 mas", "75 mas", "100 mas", "125 mas",
+            "150 mas", "200 mas", "250 mas", "300 mas", "500 mas", "700 mas",
+            "1000 mas", "1400 mas",
+        ])
+        #delta magnitude between the star and the planet (real number between 0 and 10)
+        self.delta_mag_combo = QLineEdit()
+        self.delta_mag_combo.setPlaceholderText("0.00 - 10.00")
+        delta_mag_validator = QDoubleValidator(0.0, 10.0, 3, self.delta_mag_combo)
+        delta_mag_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
+        delta_mag_validator.setLocale(QLocale(QLocale.Language.C))
+        self.delta_mag_combo.setValidator(delta_mag_validator)
 
         # Flux folder label (auto-detected)
         self.flux_folder_label = QLabel("Flux folder: not selected")
@@ -125,19 +150,19 @@ class InputParametersWindow(QWidget):
             for wavelength in wavelengths:
                 self.filter_wavelength_combo.addItem(f"{filt} - {wavelength}", (filt, wavelength))
 
-        # Detection noise (déplacé dans l'onglet Instrument)
+        # Detection noise 
         self.dark_checkbox = QComboBox()
         self.dark_checkbox.addItems(["No", "Yes"])
 
         # Création des onglets pour les input parameters
         self.input_tabs = QTabWidget()
 
-        # Instrument tab (contient tous les contrôles)
+        # Instrument tab 
         instrument_tab = QWidget()
         instrument_layout = QGridLayout(instrument_tab)
         instrument_layout.setHorizontalSpacing(12)
         instrument_layout.setVerticalSpacing(8)
-        instrument_layout.addWidget(QLabel("CLC:"), 0, 0)
+        instrument_layout.addWidget(QLabel("Coronographe:"), 0, 0)
         instrument_layout.addWidget(self.clc_combo, 0, 1)
         instrument_layout.addWidget(QLabel("NCPA:"), 1, 0)
         instrument_layout.addWidget(self.ncpa_combo, 1, 1)
@@ -160,8 +185,25 @@ class InputParametersWindow(QWidget):
         scene_layout.addWidget(QLabel("Flux folder:"), 2, 0)
         scene_layout.addWidget(self.flux_folder_label, 2, 1)
 
+        
+
+        # Planet tab (only planet-specific parameter)
+        planet_tab = QWidget()
+        planet_layout = QGridLayout(planet_tab)
+        planet_layout.setHorizontalSpacing(12)
+        planet_layout.setVerticalSpacing(8)
+        self.distance_label = QLabel("Distance:")
+        self.delta_mag_label = QLabel("DeltaMagnitude:")
+        planet_layout.addWidget(self.distance_label, 0, 0)
+        planet_layout.addWidget(self.Distance_combo, 0, 1)
+        planet_layout.addWidget(self.delta_mag_label, 1, 0)
+        planet_layout.addWidget(self.delta_mag_combo, 1, 1)
+        
+
+        left_layout.addWidget(self.planet_on_checkbox)
         self.input_tabs.addTab(instrument_tab, "Instrument")
-        self.input_tabs.addTab(scene_tab, "Scene")
+        self.input_tabs.addTab(scene_tab, "Star / Field")
+        self.input_tabs.addTab(planet_tab, "Planet")
 
         left_layout.addWidget(self.input_tabs)
 
@@ -316,7 +358,11 @@ class InputParametersWindow(QWidget):
         self.seeing_combo.currentTextChanged.connect(self.update_paths)
         self.filter_wavelength_combo.currentTextChanged.connect(self.update_paths)
         self.sampling_combo.currentTextChanged.connect(self.update_filter_wavelength_options)
+        self.Distance_combo.currentTextChanged.connect(self.update_paths)
+        self.planet_on_checkbox.stateChanged.connect(self.update_paths)
+        self.planet_on_checkbox.stateChanged.connect(self.update_planet_controls)
 
+        self.update_planet_controls()
         self.update_filter_wavelength_options()
         self.update_save_controls()
 
@@ -328,6 +374,13 @@ class InputParametersWindow(QWidget):
             self.folder_label.setText(f"Base folder: {folder}")
             self.auto_detect_flux_folder()
             self.update_paths()
+
+    def update_planet_controls(self):
+        planet_enabled = self.planet_on_checkbox.isChecked()
+        self.Distance_combo.setEnabled(planet_enabled)
+        self.delta_mag_combo.setEnabled(planet_enabled)
+        self.distance_label.setEnabled(planet_enabled)
+        self.delta_mag_label.setEnabled(planet_enabled)
 
     def auto_detect_flux_folder(self):
         """Automatically detect Flux_input folder inside base_folder."""
@@ -579,6 +632,8 @@ class InputParametersWindow(QWidget):
         wavelength_value = str(wavelength).replace(" ", "").replace("Âµm", "um")
 
         return {
+            "planet": "With_Planet" if self.planet_on_checkbox.isChecked() else "No_Planet",
+            "planet_distance": self.Distance_combo.currentText().replace(" mas", ""),
             "clc": self.clc_combo.currentText(),
             "ncpa": "NCPA" if self.ncpa_combo.currentText() == "Yes" else "NoNCPA",
             "seeing": self.seeing_combo.currentText(),
@@ -592,6 +647,7 @@ class InputParametersWindow(QWidget):
     def build_params_slug(self):
         params = self.get_parameter_values()
         slug_parts = [
+            params["planet"],
             params["clc"],
             params["ncpa"],
             params["seeing"],
@@ -600,6 +656,8 @@ class InputParametersWindow(QWidget):
         ]
         if params["magnitude"]:
             slug_parts.append(f"mag{params['magnitude']}")
+        if params["planet"] == "With_Planet":
+            slug_parts.append(f"pdist{params['planet_distance']}mas")
         slug_parts.append(params["noise"])
         raw_slug = "_".join(slug_parts)
         return "".join(
@@ -740,6 +798,7 @@ class InputParametersWindow(QWidget):
         from micado_misthic.imgproc import micado_adi
         from astropy.io import fits
 
+        total_time_start = time.time()
         cube_file = None
         psf_cube_file = None
         perf_psf_file = None
@@ -771,6 +830,7 @@ class InputParametersWindow(QWidget):
         self.files_box.append(f"Starting ADI processing on: {cube_file.name} and {psf_cube_file.name}...")
         QApplication.processEvents()
         start_time = time.time()
+
 
         # Load FITS data before calling micado_adi
         cube_data = fits.getdata(str(cube_file))
@@ -804,19 +864,29 @@ class InputParametersWindow(QWidget):
                 try:
                     zenith_distance = np.float32(zenith_distance)
                     # Get photon flux and emission data
+                    start_time_flux = time.time()
                     photon_flux, emission_per_pix, _ = self.get_micado_flux(path=path, delta_t=delta_t, zenith_distance=zenith_distance)
+                    ellapsed_flux = time.time() - start_time_flux
+                    print(f"Photon flux and emission per pixel computed in {ellapsed_flux:.2f} s.")
                     frame_exp_time = np.float32(delta_t)
                     
                     # Scale image and PSF cubes to photons with noise.
                     self.files_box.append("Creating image and PSF cubes with photon noise...")
+                    start_time_image_noise = time.time()
                     image_cube_noise, _, _ = self.scale_to_photon(
                         cube_data, perf_psf_data, photon_flux, emission_per_pix, 
                         frame_exp_time, sig_ron=15., no_noise=False
                     )
+                    ellapsed_image_noise = time.time() - start_time_image_noise
+                    print(f"Image cube with photon noise created in {ellapsed_image_noise:.2f} s.")
+
+                    start_time_PSF_noise = time.time()
                     psf_cube_noise, _, _ = self.scale_to_photon(
                         psf_cube_data, perf_psf_data, photon_flux, emission_per_pix,
                         frame_exp_time, sig_ron=15., no_noise=False
                     )
+                    ellapsed_cube_noise = time.time() - start_time_PSF_noise
+                    print(f"PSF cube with photon noise created in {ellapsed_cube_noise:.2f} s.")
                     cube_data = image_cube_noise
                     psf_cube_data = psf_cube_noise
                     noise_applied = True
@@ -824,8 +894,12 @@ class InputParametersWindow(QWidget):
                 except Exception as e:
                     self.files_box.append(f"Warning: Could not apply noise scaling: {str(e)}")
                     # Continue with unnoisy data
-
+        start_time_adi = time.time()
         adi_sum, psf_sum = micado_adi(cube_data, psf_cube_data, str(path) + "\\")
+        ellapsed_adi = time.time() - start_time_adi
+        print(f"ADI processing completed in {ellapsed_adi:.2f} s.")
+        elapsed = time.time() - start_time
+        self.files_box.append(f"ADI processing completed in {elapsed:.1f} s.")
 
         if output_dir is not None:
             if noise_applied:
@@ -840,8 +914,15 @@ class InputParametersWindow(QWidget):
 
         self.last_adi_sum = adi_sum
         self.last_psf_sum = psf_sum
-        elapsed = time.time() - start_time
-        self.files_box.append(f"ADI processing completed in {elapsed:.1f} s.")
+        self.display_adi_results(adi_sum, psf_sum)
+        
+
+        total_time_elapsed = time.time() - total_time_start
+        self.files_box.append(f"Total ADI processing function time: {total_time_elapsed:.1f} s.")
+        
+        #sommes des differents processings
+        # ellapsed_total = ellapsed_flux + ellapsed_image_noise + ellapsed_cube_noise + ellapsed_adi
+        # print(f"Total elapsed time for flux, noise, and ADI processing: {ellapsed_total:.2f} s.")
 
     def save_adi_results(self, adi_sum, psf_sum, output_dir):
         output_dir = Path(output_dir)
@@ -857,9 +938,6 @@ class InputParametersWindow(QWidget):
         self.files_box.append(
             f"ADI results saved:\n- {adi_sum_path}\n- {psf_sum_path}"
         )
-        
-        # Display the results in the matplotlib figure
-        self.display_adi_results(adi_sum, psf_sum)
 
     def display_adi_results(self, adi_sum, psf_sum):
         """Display ADI results in matplotlib figure"""
@@ -949,7 +1027,10 @@ class InputParametersWindow(QWidget):
         self.contrast_canvas.draw()
 
     def update_paths(self):
+        planet_on = self.planet_on_checkbox.isChecked()
+        planet_folder = "With_Planet" if planet_on else "No_Planet"
         clc = self.clc_combo.currentText()
+        clc_folder = self.resolve_clc_folder(self.base_folder / planet_folder, clc)
         ncpa_value = self.ncpa_combo.currentText()
         ncpa = "NCPA" if ncpa_value == "Yes" else "NoNCPA"
         seeing = self.seeing_combo.currentText()
@@ -972,17 +1053,35 @@ class InputParametersWindow(QWidget):
 
         final_path = (
             self.base_folder
-            / clc
+            / planet_folder
+            / clc_folder
             / f"{ncpa}"
             / f"{seeing}"
             / f"filter{wavelength_path}"
-            / f"samp{sampling}"
-        
         )
+        if planet_on:
+            distance = self.Distance_combo.currentText().replace(" mas", "")
+            final_path = final_path / f"p_dist_mas={distance}" / f"Samp{sampling}"
+        else:
+            final_path = final_path / f"samp{sampling}"
 
         self.path_box.setText(str(final_path)+ "\\")
 
+    def get_clc_folder_candidates(self, clc):
+        candidates = [clc]
+        legacy_clc = self.clc_legacy_folder_map.get(clc)
+        if legacy_clc is not None:
+            candidates.append(legacy_clc)
+        return candidates
+
+    def resolve_clc_folder(self, parent_folder, clc):
+        for candidate in self.get_clc_folder_candidates(clc):
+            if (parent_folder / candidate).exists():
+                return candidate
+        return clc
+
     def run_processing(self):
+        planet_folder = "With_Planet" if self.planet_on_checkbox.isChecked() else "No_Planet"
         clc = self.clc_combo.currentText()
         ncpa_value = self.ncpa_combo.currentText()
         ncpa = "NCPA" if ncpa_value == "Yes" else "NoNCPA"
@@ -1002,6 +1101,7 @@ class InputParametersWindow(QWidget):
         adi = self.adi_checkbox.currentText()
 
         print("========== PARAMETERS ==========")
+        print(f"Planet: {planet_folder}")
         print(f"CL: {clc}")
         print(f"NCPA: {ncpa}")
         print(f"Seeing: {seeing}")
