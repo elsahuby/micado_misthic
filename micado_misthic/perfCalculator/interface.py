@@ -1,4 +1,6 @@
 import sys
+import ast
+import inspect
 from pathlib import Path
 import numpy as np
 import time
@@ -7,7 +9,8 @@ from datetime import datetime
 
 from micado_misthic.utils.obsparams import *
 from configobj import ConfigObj
-
+import user_func as user_functions
+from user_func import *
 
 from PyQt6.QtWidgets import (
     QApplication,
@@ -50,6 +53,8 @@ class InputParametersWindow(QWidget):
         self.last_psf_sum = None
         self.last_output_dir = None
         self.last_params_slug = None
+        self.last_contrast_curve_path = None
+        self.last_adi_source_dir = None
 
         self.init_ui()
         self.update_paths()
@@ -90,7 +95,7 @@ class InputParametersWindow(QWidget):
         left_layout.addLayout(folder_layout)
 
         # Formulaire divisé en onglets : Instrument / Scene
-        # Préparer les contrôles : tout dans Instrument, seulement Seeing dans Scene
+        
         self.clc_legacy_folder_map = {
             "CLC15": "CLC0",
             "CLC25": "CLC1",
@@ -139,7 +144,7 @@ class InputParametersWindow(QWidget):
         self.sampling_combo = QComboBox()
         self.sampling_combo.addItems(["1.5", "4.0"])
 
-        # Filter + wavelength ensemble
+        # Filter + wavelength 
         self.filter_wavelength_map = {
             "J": ["1.19 µm", "1.245 µm", "1.270 µm"],
             "H": ["1.582 µm", "1.635 µm", "1.693 µm"],
@@ -173,7 +178,7 @@ class InputParametersWindow(QWidget):
         instrument_layout.addWidget(QLabel("Detection noise:"), 4, 0)
         instrument_layout.addWidget(self.dark_checkbox, 4, 1)
 
-        # Scene tab (only scene-specific parameter)
+        # Scene tab 
         scene_tab = QWidget()
         scene_layout = QGridLayout(scene_tab)
         scene_layout.setHorizontalSpacing(12)
@@ -187,7 +192,7 @@ class InputParametersWindow(QWidget):
 
         
 
-        # Planet tab (only planet-specific parameter)
+        # Planet tab 
         planet_tab = QWidget()
         planet_layout = QGridLayout(planet_tab)
         planet_layout.setHorizontalSpacing(12)
@@ -349,6 +354,22 @@ class InputParametersWindow(QWidget):
         self.files_box.setMaximumHeight(80)
         right_layout.addWidget(self.files_box)
 
+        self.preprocessing_function_combo = QComboBox()
+        self.user_function_map = self.get_user_function_map()
+        self.preprocessing_function_combo.addItems(self.user_function_map.keys())
+
+        self.preprocessing_argument = QLineEdit()
+        self.preprocessing_argument.setPlaceholderText("Distance in mas")
+
+        self.preprocessing_run_button = QPushButton("Run function")
+        self.preprocessing_run_button.clicked.connect(self.run_preprocessing_function)
+
+        preprocessing_input_layout = QHBoxLayout()
+        preprocessing_input_layout.addWidget(self.preprocessing_function_combo, 2)
+        preprocessing_input_layout.addWidget(self.preprocessing_argument, 3)
+        preprocessing_input_layout.addWidget(self.preprocessing_run_button, 1)
+        right_layout.addLayout(preprocessing_input_layout)
+
         main_layout.addWidget(right_frame, 1)
         self.setLayout(main_layout)
 
@@ -365,6 +386,40 @@ class InputParametersWindow(QWidget):
         self.update_planet_controls()
         self.update_filter_wavelength_options()
         self.update_save_controls()
+
+    def get_user_function_map(self):
+        return {
+            name: func
+            for name, func in inspect.getmembers(user_functions, inspect.isfunction)
+            if func.__module__ == user_functions.__name__ and not name.startswith("_")
+        }
+
+    def parse_function_arguments(self, argument_text):
+        if not argument_text:
+            return []
+
+        try:
+            parsed = ast.literal_eval(f"({argument_text},)")
+        except Exception:
+            parsed = tuple(part.strip() for part in argument_text.split(","))
+
+        if not isinstance(parsed, tuple):
+            parsed = (parsed,)
+
+        arguments = []
+        for value in parsed:
+            if isinstance(value, str):
+                value = value.strip()
+                if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+                    value = value[1:-1]
+                else:
+                    try:
+                        value = ast.literal_eval(value)
+                    except Exception:
+                        pass
+            arguments.append(value)
+
+        return arguments
 
     def choose_base_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Choose base folder")
@@ -568,7 +623,7 @@ class InputParametersWindow(QWidget):
 
     def update_filter_wavelength_options(self):
         sampling = self.sampling_combo.currentText()
-        # si sampling == 4 (numérique), on n'autorise pas la bande J
+        # si sampling == 4, on n'autorise pas la bande J
         try:
             sampling_val = float(sampling)
         except Exception:
@@ -613,6 +668,35 @@ class InputParametersWindow(QWidget):
         if not save_enabled:
             self.save_root = None
             self.save_folder_label.setText("No save folder selected")
+
+    def run_preprocessing_function(self):
+        function_name = self.preprocessing_function_combo.currentText()
+        argument = self.preprocessing_argument.text().strip()
+        selected_function = self.user_function_map.get(function_name)
+
+        if selected_function is None:
+            self.files_box.append(f"Unknown function: {function_name}")
+            return
+
+        try:
+            arguments = self.parse_function_arguments(argument)
+            if function_name == "get_contrast_from_contrast_curve_file":
+                if self.last_contrast_curve_path is None:
+                    self.files_box.append(
+                        "No contrast curve FITS available. Generate and save the contrast curve first."
+                    )
+                    return
+                if len(arguments) != 1:
+                    self.files_box.append("Please enter only the distance in mas.")
+                    return
+                arguments = [self.last_contrast_curve_path, arguments[0]]
+            result = selected_function(*arguments)
+
+            if function_name == "get_contrast_from_contrast_curve_file":
+                plot_function_name = "Contrast"
+                self.files_box.append(f"{plot_function_name}({argument}) = {result}")
+        except Exception as e:
+            self.files_box.append(f"Function failed ({function_name}): {e}")
 
     def choose_save_root_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Choose ADI save folder")
@@ -799,6 +883,10 @@ class InputParametersWindow(QWidget):
         from astropy.io import fits
 
         total_time_start = time.time()
+        self.last_output_dir = None
+        self.last_params_slug = None
+        self.last_contrast_curve_path = None
+        self.last_adi_source_dir = Path(path)
         cube_file = None
         psf_cube_file = None
         perf_psf_file = None
@@ -976,41 +1064,33 @@ class InputParametersWindow(QWidget):
 
         x = x * pxscale
         self.display_contrast_curve(x, rms_contrast)
-        if self.last_output_dir is not None:
-            self.save_contrast_curve(x, rms_contrast, self.last_output_dir)
+        self.last_contrast_curve_path = None
+        contrast_output_dir = self.last_output_dir or self.last_adi_source_dir
+        if contrast_output_dir is not None:
+            self.last_contrast_curve_path = self.save_contrast_curve(x, rms_contrast, contrast_output_dir)
         self.tab_widget.setCurrentIndex(1)
         elapsed = time.time() - start_time
         self.files_box.append(f"Contrast curve generated in {elapsed:.1f} s.")
 
     def save_contrast_curve(self, x, contrast, output_dir):
+        from astropy.io import fits
+
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         params_slug = self.last_params_slug or self.build_params_slug()
 
-        table_path = output_dir / f"{params_slug}_contrast_curve.txt"
-        figure_path = output_dir / f"{params_slug}_contrast_curve.png"
+        fits_path = output_dir / f"{params_slug}_contrast_curve.fits"
 
-        np.savetxt(
-            table_path,
-            np.column_stack((x, contrast)),
-            header="separation_mas contrast_5sigma",
-        )
-
-        export_figure = Figure(figsize=(8, 5), dpi=150)
-        ax = export_figure.add_subplot(111)
-        ax.plot(x, contrast, color="#a24814", linewidth=1.8)
-        ax.set_title('5-sigma contrast curve', fontsize=14, fontweight='bold')
-        ax.set_xlabel('Angular separation (mas)')
-        ax.set_ylabel('Contrast, 5-sigma')
-        ax.set_yscale('log')
-        ax.grid(color='.9')
-        ax.set_xlim(left=0)
-        export_figure.tight_layout()
-        export_figure.savefig(figure_path, dpi=150)
+        contrast_table = fits.BinTableHDU.from_columns([
+            fits.Column(name="separation_mas", array=np.asarray(x, dtype=np.float64), format="D"),
+            fits.Column(name="contrast_5sigma", array=np.asarray(contrast, dtype=np.float64), format="D"),
+        ])
+        contrast_table.writeto(fits_path, overwrite=True)
 
         self.files_box.append(
-            f"Contrast curve saved:\n- {table_path}\n- {figure_path}"
+            f"Contrast curve saved:\n- {fits_path}"
         )
+        return fits_path
 
     def display_contrast_curve(self, x, contrast):
         self.contrast_figure.clear()
