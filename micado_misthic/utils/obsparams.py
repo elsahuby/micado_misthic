@@ -228,7 +228,7 @@ def get_micado_flux(flux_dir, spectrum, filter_type, obs_time, aperture_surface_
             '1.582':tr_filter0[2,:],
             '1.693':tr_filter0[3,:],
             '2.100':tr_filter0[4,:],
-            '2.220':tr_filter0[5,:], #update Elsa 22.09.16
+            '2.235':tr_filter0[5,:], #update Elsa 22.09.16
             '1.245':tr_filter1[0,:],
             '1.635':tr_filter1[1,:],
             '2.145':tr_filter1[2,:],
