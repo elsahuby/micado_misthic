@@ -233,6 +233,10 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
     rotat_fits        = aberrconfig['rotat_fits']
     rotat_file        = aberrconfig['rotat_file']
     rotat_rms_nm      = aberrconfig['rotat_rms_nm']
+    ### -- NCPA
+    ncpa_fits         = aberrconfig['ncpa_fits']
+    ncpa_opd_file     = aberrconfig['ncpa_opd_file']
+    ncpa_ampl_file    = aberrconfig['ncpa_ampl_file']
     ### -- Atmospheric Refraction
     atm_refrac_ON     = aberrconfig['atm_refrac_ON']
     post_ADC_ON       = aberrconfig['post_ADC_ON']
@@ -493,6 +497,8 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
     post_zernike_opd_screen = 0.
     static_opd_screen       = 0.
     rotat_opd_screen_i      = 0.
+    ncpa_opd_screen_i       = 0.
+    ncpa_ampl_screen_i      = 1.
     turbu_opd_screen_i      = 0.
     refraction_tilt         = 0.
     pre_apod                = 1. # amp. apodization: init. to 1 (no apod)
@@ -552,6 +558,13 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
         rotat_opd_screen = get_opd_screen(grid_width, rotat_rms_nm,
                                               high_freq_cut=grid_width/2.,
                                               pup_radius=pup_diameter/2.)
+
+    ###################### NCPA (phase and amplitude) #######################
+    if ncpa_fits is True :
+        ncpa_opd_cube = fits.getdata(input_directory + ncpa_opd_file)
+        print('Phase NCPA aberration loaded from file '+ ncpa_opd_file)
+        ncpa_ampl_cube = fits.getdata(input_directory + ncpa_ampl_file)
+        print('Amplitude NCPA aberrations loaded from file '+ ncpa_ampl_file)
 
     ##################### ATMOSPHERIC REFRACTION ######################
     if atm_refrac_ON is True :
@@ -770,6 +783,17 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
                 rotat_opd_screen_i = rotate_frame(rotat_opd_screen, sub_parangle[t])
 #                rotat_opd_screen_i = rotat_opd_screen.copy()
 
+            if (ncpa_fits is True): # ==== quasi-static NCPA aberration screen
+                if np.fix(np.abs(sub_zendist[t])) < 60:
+                    i0 = np.int32(np.fix(np.abs(sub_zendist[t])))
+                    err0 = np.abs(sub_zendist[t]) -i0
+                    print(np.shape(sub_zendist[t]),i0,err0)
+                    ncpa_opd_screen_i = ncpa_opd_cube[i0]*(1.-err0) + ncpa_opd_cube[i0+1]*err0 
+                    ncpa_ampl_screen_i = ncpa_ampl_cube[i0]*(1.-err0) + ncpa_ampl_cube[i0+1]*err0 
+                else:
+                    ncpa_opd_screen_i = ncpa_opd_cube[60]
+                    ncpa_ampl_screen_i = ncpa_ampl_cube[60]  
+
             #### SPHERE JITTER ###
             if sphere_jitter is True:
                 jitter_mas = sphere_jitter_data[:,i*n_img_mean+t] # [mas]
@@ -795,7 +819,7 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
             ##################### TOTAL PRE-CORO OPD SCREEN ##################
             opd_screen = (turbu_opd_screen_i + static_opd_screen +
                           rotat_opd_screen_i + pre_zernike_opd_screen +
-                          pre_aberr_opd      + jitter_map)
+                          pre_aberr_opd      + jitter_map + ncpa_opd_screen_i)
 
             ##################### LYOT DRIFT ##################
             if lyot_drift[0] != 0 or lyot_drift[1] != 0 :
@@ -841,7 +865,7 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
                 # INPUT WAVEFRONT
                 wavefront  = (pup_mask * np.exp(1j * phase_screen) *
                               pre_apod * np.exp(1j * pre_phas_l) *
-                              pre_amp )
+                              pre_amp + ncpa_ampl_screen_i)
                 # wavefront for no coro PSF : the same
 #                wavefront0 = wavefront.copy()
 
@@ -1013,11 +1037,11 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
                     pupil_plane = {'pupil mask': [pup_mask,0],
                                    'pupil apod.': [pre_apod,0],
                                    'pupil phase' : [pre_phas, 1],
-                                   'pupil amp' : [pre_amp, 0],
+                                   'pupil amp' : [pre_amp+ncpa_ampl_screen_i, 0],
                                    'pre aberr': [pre_aberr_opd,1],
                                    'pre zernike': [pre_zernike_opd_screen,1],
                                    'static': [static_opd_screen,1],
-                                   'quasi static': [rotat_opd_screen_i,1],
+                                   'quasi static': [rotat_opd_screen_i+ncpa_opd_screen_i,1],
                                    'turbu': [turbu_opd_screen_i,1],
                                    'planet': [planet_tilt, 1],
                                    'sphere jitter': [jitter_map, 1],
