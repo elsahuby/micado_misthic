@@ -787,9 +787,12 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
                 if np.fix(np.abs(sub_zendist[t])) < 60:
                     i0 = np.int32(np.fix(np.abs(sub_zendist[t])))
                     err0 = np.abs(sub_zendist[t]) -i0
-                    print(np.shape(sub_zendist[t]),i0,err0)
+                    #print(np.shape(sub_zendist[t]),i0,err0,wave_tab)
                     ncpa_opd_screen_i = ncpa_opd_cube[i0]*(1.-err0) + ncpa_opd_cube[i0+1]*err0 
                     ncpa_ampl_screen_i = ncpa_ampl_cube[i0]*(1.-err0) + ncpa_ampl_cube[i0+1]*err0 
+                    #i0 = np.int32(np.round(np.abs(sub_zendist[t])))
+                    #ncpa_opd_screen_i = ncpa_opd_cube[i0]
+                    #ncpa_ampl_screen_i = ncpa_ampl_cube[i0] 
                 else:
                     ncpa_opd_screen_i = ncpa_opd_cube[60]
                     ncpa_ampl_screen_i = ncpa_ampl_cube[60]  
@@ -865,7 +868,7 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
                 # INPUT WAVEFRONT
                 wavefront  = (pup_mask * np.exp(1j * phase_screen) *
                               pre_apod * np.exp(1j * pre_phas_l) *
-                              pre_amp + ncpa_ampl_screen_i)
+                              pre_amp * ncpa_ampl_screen_i)
                 # wavefront for no coro PSF : the same
 #                wavefront0 = wavefront.copy()
 
@@ -1037,11 +1040,11 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
                     pupil_plane = {'pupil mask': [pup_mask,0],
                                    'pupil apod.': [pre_apod,0],
                                    'pupil phase' : [pre_phas, 1],
-                                   'pupil amp' : [pre_amp+ncpa_ampl_screen_i, 0],
+                                   'pupil amp' : [pre_amp*ncpa_ampl_screen_i, 0],
                                    'pre aberr': [pre_aberr_opd,1],
                                    'pre zernike': [pre_zernike_opd_screen,1],
                                    'static': [static_opd_screen,1],
-                                   'quasi static': [rotat_opd_screen_i+ncpa_opd_screen_i,1],
+                                   'quasi static': [(rotat_opd_screen_i+ncpa_opd_screen_i),1],
                                    'turbu': [turbu_opd_screen_i,1],
                                    'planet': [planet_tilt, 1],
                                    'sphere jitter': [jitter_map, 1],
@@ -1165,7 +1168,7 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
             print('Now saving FITS files...')
 
         # Extra config lines
-        config_extra = {'date_start':stamp_start2, 'date_end':stamp_end,
+        config_extra = {'sum_perfect_psf':np.sum(perf_nocoro_poly),'date_start':stamp_start2, 'date_end':stamp_end,
                         'total_time ('+time_unit+')':(round(total_time*100.)/100.)}
 
         if static_rms_nm != 0:
