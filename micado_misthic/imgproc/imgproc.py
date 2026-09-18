@@ -503,6 +503,7 @@ def micado_adi(cube, cube_psf, par_dir):
     '''
     # Open parallactic angle table
     table = [f for f in os.listdir(par_dir) if f.endswith('_parangle_tab.txt')][0]
+    #table = [f for f in os.listdir(par_dir) if f.endswith('imagespercube.txt')][0]
     parallactic = np.loadtxt(par_dir+table,skiprows=1)
     
     # Length check for frames

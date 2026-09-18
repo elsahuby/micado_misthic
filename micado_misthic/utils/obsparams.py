@@ -47,9 +47,9 @@ def get_air_index(wavelength, pressure=537., temperature=10., rel_humidity=20.):
     ; and Physics.
 
     """
-    n = np.float(64.328) + 29498.1/(146.0 - (1.0/wavelength)**2) + 255.4/(41.0 - (1.0/wavelength)**2)
+    n = np.float64(64.328) + 29498.1/(146.0 - (1.0/wavelength)**2) + 255.4/(41.0 - (1.0/wavelength)**2)
 #    print(n)
-    pfac = np.float(pressure) * (1.0+(1.049-0.0157*temperature)*1.0e-6*pressure)/(720.883*(1.0 + 0.003661*temperature))
+    pfac = np.float64(pressure) * (1.0+(1.049-0.0157*temperature)*1.0e-6*pressure)/(720.883*(1.0 + 0.003661*temperature))
 #    print(pfac)
     dt = 100.0 - temperature
 #    print(dt)
@@ -57,11 +57,11 @@ def get_air_index(wavelength, pressure=537., temperature=10., rel_humidity=20.):
 #    print(logp)
     f = rel_humidity * logp**10.0
 #    print(f)
-    water = (np.float(0.0624) - 0.000680/wavelength**2)*f/(1.0 + 0.003661*temperature)
+    water = (np.float64(0.0624) - 0.000680/wavelength**2)*f/(1.0 + 0.003661*temperature)
 #    print(water)
     n = ( n - water ) * pfac
 #    print(n)
-    n = (1.0 + n * np.float(1.0e-6))
+    n = (1.0 + n * np.float64(1.0e-6))
 #    print(n)
     return n
 
