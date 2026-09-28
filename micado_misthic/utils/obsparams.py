@@ -71,6 +71,8 @@ def scale_to_photons(img_cube, perf_psf, photon_flux, emission_flux,
     """
     Convert the image levels into photons and include the photon noise and read out noise.
     """
+
+
     if len(img_cube.shape) == 2:
         img_cube = img_cube[np.newaxis,:,:]
         nocube = True
@@ -123,6 +125,7 @@ def scale_to_photons(img_cube, perf_psf, photon_flux, emission_flux,
         if not silent:
             print(f"### Total Flux (within scale_to_photon func): {photon_flux:.3e}")
         img_cube_noisy = rng.poisson(img_cube)
+        
         # psf_cube_noisy  = rng.poisson(psf_cube)
         perf_psf_noisy  = rng.poisson(perf_psf)
 
@@ -133,7 +136,7 @@ def scale_to_photons(img_cube, perf_psf, photon_flux, emission_flux,
             if set_ron_equivalent is True:
                 # Mean coronographic img
                 mean_coro = np.mean(img_cube_noisy,axis=0)
-                exp_time = FWC / (np.max(mean_coro) / frame_exp_time)
+                exp_time = FWC / (np.max(mean_coro) / frame_exp_time) 
                 
                 if exp_time <= 1.3 or exp_time >= frame_exp_time:
                     if not silent :
@@ -168,6 +171,10 @@ def scale_to_photons(img_cube, perf_psf, photon_flux, emission_flux,
 
     if nocube:
         img_cube_noisy = img_cube_noisy[0]
+    
+
+  
+
 
     return img_cube_noisy, perf_psf_noisy, flux_per_frame
 
@@ -210,7 +217,7 @@ def get_micado_flux(flux_dir, spectrum, filter_type, obs_time, aperture_surface_
     # airmass is set to 1 by default
     # pixel_scale is set to 4 mas by default
     
-    tr_filter0  = fits.getdata(flux_dir+'Transmission_filter_J1J2H1H2K1K2_v2020.fits')
+    tr_filter0  = fits.getdata(flux_dir+'Transmission_filter_J1J2H1H2K1K2_v2026.fits') # update 01/07/2026 Tristan (2020 -> 2026)
     tr_filter1  = fits.getdata(flux_dir+'Transmission_filter_JHK.fits')
     tr_atmo0    = fits.getdata(flux_dir+'Transmission_atmo_airmass=1_to_3.fits')
     x_airmass   = fits.getdata(flux_dir+'Airmass=1_to_3_for_trans_atmo.fits')
@@ -229,9 +236,9 @@ def get_micado_flux(flux_dir, spectrum, filter_type, obs_time, aperture_surface_
             '1.693':tr_filter0[3,:],
             '2.100':tr_filter0[4,:],
             '2.235':tr_filter0[5,:], #update Elsa 22.09.16
-            '1.245':tr_filter1[0,:],
+            '1.247':tr_filter1[0,:],
             '1.635':tr_filter1[1,:],
-            '2.145':tr_filter1[2,:],
+            '2.150':tr_filter1[2,:],
             '0':np.ones_like(tr_filter1[2,:])
             } 
         return switcher.get(filter_type, lambda: "No filter defined")
