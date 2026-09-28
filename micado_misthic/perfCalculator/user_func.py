@@ -10,7 +10,8 @@ def get_contrast_from_contrast_curve_file(fits_path, distance_in_mas):
     - distance_in_mas: float, the distance in milliarcseconds for which to retrieve the contrast.
     
     Returns:
-    - contrast_value: float, the contrast value at the specified distance. Returns None if the distance is out of bounds.
+    - contrast_value: float, the nearest sampled contrast value.
+      Returns None if the distance is outside the sampled separation range.
     """
     
     # Open the FITS file and read the data
@@ -21,11 +22,17 @@ def get_contrast_from_contrast_curve_file(fits_path, distance_in_mas):
     separations = data['separation_mas']
     contrasts = data['contrast_5sigma']
     
-    # Find the index of the closest separation value
+    distance_in_mas = float(distance_in_mas)
+    if not np.isfinite(distance_in_mas):
+        raise ValueError("Distance must be finite.")
+    valid = np.isfinite(separations)
+    separations = separations[valid]
+    contrasts = contrasts[valid]
+    if separations.size == 0:
+        raise ValueError("The contrast curve contains no valid separations.")
+    if not separations.min() <= distance_in_mas <= separations.max():
+        return None
+
+    # Use the nearest sample inside the curve, regardless of grid spacing.
     idx = (np.abs(separations - distance_in_mas)).argmin()
-    
-    # Check if the closest separation is within a reasonable range 
-    if np.abs(separations[idx] - distance_in_mas) <= 1.0:
-        return contrasts[idx]
-    else:
-        return None  # Return None if the distance is out of bounds
+    return float(contrasts[idx])
