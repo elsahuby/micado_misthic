@@ -6,6 +6,7 @@ from scipy import interpolate
 import sys
 import os
 from astropy.io import fits
+import time
 
 def get_frame_center(nyx, centering='FFTSTYLE'):
     """
@@ -45,7 +46,7 @@ def get_frame_center(nyx, centering='FFTSTYLE'):
 
     return (cy,cx)
 
-def rotate_frame(img, angle, interpolation = 'lanczos4', cyx=None):
+def rotate_frame(img, angle, interpolation = 'nearest', cyx=None):
     """
     Rotates the input frame by the given angle (in degrees), around the center
     of the frame by default, or around the given cxy coordinates.
@@ -266,6 +267,7 @@ def fft_resize(img_0, lbd0, sampling_misthic, pixscale_in_mas, write_dir=0, plot
     '''
     if len(np.shape(img_0)) <= 2:
         dim = len(img_0[0,:])
+       
         img = np.zeros((1,dim,dim))
         img[0] = img_0
     else:
@@ -509,7 +511,7 @@ def micado_adi(cube, cube_psf, par_dir):
         psf_sum : Sum total of PSF frames
     ---------------------------------------------------------------------------
     Authors: H. Baran, P. Baudoz
-    ===========================================================================
+    ===========================================================================    
     '''
     # Open parallactic angle table
     table = [f for f in os.listdir(par_dir) if f.endswith('_parangle_tab.txt')][0]
@@ -544,8 +546,14 @@ def micado_adi(cube, cube_psf, par_dir):
     # Mean of derotated images
     # adi_stack = np.mean(cube_coronogr,axis=0)
     adi_sum = np.sum(cube2, axis=0)
-    
+
     adi_stdev = np.std(adi_sum)
+    
     print("Standard dev of image cube after noise and ADI:", adi_stdev)
 
+    
+    
+    
     return adi_sum, psf_sum
+
+
