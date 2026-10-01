@@ -1,3 +1,8 @@
+"""
+Author: Tristan Deseine
+"""
+
+import os
 from pathlib import Path
 import shutil
 from tempfile import TemporaryDirectory
@@ -105,7 +110,7 @@ def main():
                     psf_cube, _ = select_observation_time(minutes, full_psf_cube, full_angles, delta_t)
                     with TemporaryDirectory() as parangle_dir:
                         np.savetxt(Path(parangle_dir) / "selected_parangle_tab.txt", angles, header="a")
-                        adi_sum, psf_sum = micado_adi(cube, psf_cube, parangle_dir + "\\")
+                        adi_sum, psf_sum = micado_adi(cube, psf_cube, parangle_dir + os.sep)
                     for path, data in ((adi_output_path, adi_sum), (psf_output_path, psf_sum)):
                         if not path.is_file():
                             fits.writeto(path, data.astype(np.float32))
