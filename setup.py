@@ -1,4 +1,4 @@
-from setuptools import setup  
+from setuptools import find_packages, setup
 
 
 setup(name='micado_misthic',
@@ -8,7 +8,7 @@ setup(name='micado_misthic',
       author='E. Huby, P. Baudoz',
       author_email='elsa.huby@obspm.fr',
       license='',
-      packages=['micado_misthic'],
+      packages=find_packages(),
       install_requires=[
       	'numpy >= 1.26.4',
         'configobj',
@@ -19,13 +19,13 @@ setup(name='micado_misthic',
         'Astropy >= 6.0.1',
         'scipy',
         'matplotlib',
+        'PyQt6',
         #'pylab-sdk',
         'pyfftw',
         'poppy', #==0.9.1',
-        'datetime',
         'tqdm', 
         'pandas'
       ],
       include_package_data = True,
+      package_data={'micado_misthic.perfCalculator.interface_modules': ['*.md']},
       zip_safe=False)
- 

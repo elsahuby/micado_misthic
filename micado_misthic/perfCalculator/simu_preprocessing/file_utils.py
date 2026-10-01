@@ -1,3 +1,7 @@
+"""
+Author: Tristan Deseine
+"""
+
 import os
 import shutil
 from configobj import ConfigObj

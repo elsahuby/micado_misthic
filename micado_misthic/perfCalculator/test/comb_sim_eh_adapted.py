@@ -5,6 +5,7 @@ Created on Tue Mar 15 17:59:28 2022
 
 @author: hbaran
 Script adapted by EHuby
+Test file by Elsa Huby.
 """
 
 import numpy as np
@@ -198,10 +199,10 @@ for i in range(len(lbd)):
            
             ### NEW ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
             # Star Spectrum
-            # star_flux = get_star_spectrum(flux_dir, star_mag, lbd[i])
+            star_flux = get_star_spectrum(flux_dir, star_mag, lbd[i])
             # # Aperture Surface
-            # telescope_surface = get_aperture_surface(telescope_pupil_file)
-            # photon_flux, emission_per_pix, global_transmission = get_micado_flux(flux_dir, 
+            #telescope_surface = get_aperture_surface(telescope_pupil_file)
+            #photon_flux, emission_per_pix, global_transmission = get_micado_flux(flux_dir, 
             #                                                                      star_flux, f'{lbd[0]:5.3f}', 
             #                                                                      frame_exp_time, telescope_surface, 
             #                                                                      airmass=airmass, pixel_scale=pixscale_in_mas)
@@ -570,5 +571,4 @@ for i in range(len(lbd)):
 
 #     for j,d in enumerate(pl_dist):
 #         plt.plot(d, all_pl_max[i,j], 'o')
-
 

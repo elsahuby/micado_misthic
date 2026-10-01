@@ -1,3 +1,8 @@
+"""
+Author: Tristan Deseine
+"""
+
+import os
 
 from scipy.signal import fftconvolve
 import numpy as np
@@ -166,7 +171,7 @@ def run_adi_without_noise(cube, psf_cube, parallactic_dir, adi_file=None):
         print(f"### Reusing clean ADI: {adi_file}")
         adi_sum = fits.getdata(adi_file)
     else:
-        adi_sum, _ = micado_adi(cube, psf_cube, str(parallactic_dir) + "\\")
+        adi_sum, _ = micado_adi(cube, psf_cube, str(parallactic_dir) + os.sep)
         fits.writeto(adi_file, adi_sum, overwrite=False)
     noise_info = {
         "n_frames": cube.shape[0],
