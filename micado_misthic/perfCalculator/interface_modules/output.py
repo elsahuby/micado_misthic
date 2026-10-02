@@ -150,7 +150,7 @@ class OutputMethods:
 
         Input:
         path: str or Path
-            Directory containing ``*_misthic_config_test.ini``.
+            Directory containing the simulation ``.ini`` file.
         section_name: str
             Configuration section to inspect.
         keys: str or list[str]
@@ -163,11 +163,17 @@ class OutputMethods:
 
         path = Path(path)
 
-        config_files = list(path.glob("*_misthic_config_test.ini"))
+        config_files = list(path.glob("*.ini"))
 
         if not config_files:
             self.files_box.append(
-                "Warning: Config file (*_misthic_config_test.ini) not found in path."
+                "Warning: Config file (*.ini) not found in path."
+            )
+            return None
+
+        if len(config_files) > 1:
+            self.files_box.append(
+                f"Warning: Multiple config files (*.ini) found in {path}."
             )
             return None
 
