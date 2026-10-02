@@ -290,19 +290,29 @@ def fft_resize(img_0, lbd0, sampling_misthic, pixscale_in_mas, write_dir=0, plot
         # Shift image by (-dim/2, -dim/2); puts PSF in four corners
         shift1 = np.roll(img[i], (int(-dim/2), int(-dim/2)), axis=(1, 0))
     
-        # FFT of image to get pupil
+        # FFT of image to get to Fourier plane
         fft1 = np.fft.fftn(shift1, axes=(1,0))
 
-        #  Plot pupil
-        shift2 = np.roll(fft1, (int(dim/2), int(dim/2)), axis=(1, 0))
 
-        # Add zeroes to pad image to dim1 size - only works for enlarging image
-        new_size = np.zeros((dim1,dim1),dtype=np.complex128)
-        new_size[0:dim,0:dim] = shift2 + new_size[0:dim,0:dim] 
-        
-        # Move FT image to corners
-        shift3 = np.roll(new_size, (int(-dim/2), int(-dim/2)), axis=(1, 0))
-        
+        if dim1 > dim:  # Enlarging image
+            #  Shift  Fourier plane 
+            shift2 = np.roll(fft1, (int(dim/2), int(dim/2)), axis=(1, 0))
+
+            # Add zeroes to pad image to dim1 size - only works for enlarging image
+            new_size = np.zeros((dim1,dim1),dtype=np.complex128)
+            new_size[0:dim,0:dim] = shift2 + new_size[0:dim,0:dim] 
+
+            # Move FT image to corners
+            shift3 = np.roll(new_size, (int(-dim/2), int(-dim/2)), axis=(1, 0))
+
+        else:  # Decreasing size of the image
+            #  Shift  Fourier plane 
+            shift2 = np.roll(fft1, (int(dim1/2), int(dim1/2)), axis=(1, 0))
+            # Crop to new image size
+            new_size = shift2[0:dim1,0:dim1] 
+            # Move FT image to corners
+            shift3 = np.roll(new_size, (int(-dim1/2), int(-dim1/2)), axis=(1, 0))
+
         # Inverse FFT of image at corners
         # > note: keep type of fft constant ! fft = ifft; fft2 = ifft2; fftn = ifftn
         inv = np.fft.ifftn(shift3, axes=(1,0))
