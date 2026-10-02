@@ -25,12 +25,18 @@ wave_name = 'H-mono'
 
 
 ## PARAMETER FILE: CORO CONFIG
-paf_directory     = 'config_files/'
 
-# pf = paf_directory+"misthic_config_micado_CLC0"
-pf = paf_directory+"misthic_config_micado_CLC1"
-# pf = paf_directory+"misthic_config_micado_CLC2"
-# pf = paf_directory+"misthic_config_micado_vortex2"
+# put the path to your config files here
+paf_directory     = 'C:/Users/Red Slottje/Documents/Repo git misthic/tests/config_files/'
+
+# put the specific config file you need here
+config_file = "misthic_config_micado_CLC0"
+
+pf = paf_directory+config_file+'_default.ini'
+
+## Output and Input directories here
+output_directory = 'C:/Users/Red Slottje/Documents/Misthic_outputs/'
+input_directory = 'C:/Users/Red Slottje/Documents/Misthic_inputs/'
 
 
 ###### -- Static Aberrations #################################################
@@ -77,8 +83,9 @@ det_fov                 = 128 # lamdba/D
 local_test = True
 
 ### path to the configspec file (same as the misthic_func.py module)
-configspec_file   = os.path.dirname(misthic_func.__file__)+'/misthic_configspec.ini'
-
+    #using os.path.dirname in Windows puts the path with antislashes, which Python can't interpret
+#configspec_file   = os.path.dirname(misthic_func.__file__)+'/misthic_configspec.ini'
+configspec_file = 'C:/Users/Red Slottje/Documents/Repo git misthic/micado_misthic/misthic_configspec.ini'
 
 ### Spectral band ############################################################
 if wave_name == 'K-mono' :
@@ -93,19 +100,15 @@ print('\n --- '+pf+' ---')
 
 new_output_dir = f'{wave_name}/'
 
-config  = ConfigObj(pf+"_default.ini", configspec=configspec_file)
+config  = ConfigObj(pf, configspec=configspec_file)
 
 #output_directory = config['output_directory']
 
 ind_coro = pf.find('micado_') + len('micado_')
 
 if local_test is True :
-    output_directory = '/home/ehuby/WORK/SIMU/SIMU_MICADO/OUTPUT/'+pf[ind_coro:]+'/'
-    config['input_directory'] = '/home/ehuby/WORK/SIMU/SIMU_MICADO/INPUT/'
     checking_plots = True
 else :
-    output_directory = '/data5/ehuby/SIMU_MICADO/OUTPUT/'+pf[ind_coro:]+'/'
-    config['input_directory'] = '/data5/ehuby/SIMU_MICADO/INPUT/'
     checking_plots = False
 
 config_current = pf+"_current.ini"
