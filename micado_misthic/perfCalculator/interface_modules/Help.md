@@ -29,7 +29,7 @@ The available wavelengths depend on the sampling. A sampling of 4 mas/pixel does
 
 ## Stellar parameters
 
-* ***Seeing:** atmospheric seeing used by the simulation.
+* **Seeing:** atmospheric seeing used by the simulation.
 * **Magnitude:** required when detection noise is enabled.
 * **Declination:** value between -90° and 90°. It selects the nearest available zenith distance.
 * **Flux folder:** detected automatically inside the selected base folder.
