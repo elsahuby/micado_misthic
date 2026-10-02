@@ -233,10 +233,10 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
     rotat_fits        = aberrconfig['rotat_fits']
     rotat_file        = aberrconfig['rotat_file']
     rotat_rms_nm      = aberrconfig['rotat_rms_nm']
-    ### -- NCPA
-    ncpa_fits         = aberrconfig['ncpa_fits']
-    ncpa_opd_file     = aberrconfig['ncpa_opd_file']
-    ncpa_ampl_file    = aberrconfig['ncpa_ampl_file']
+    ### -- Beamwalk
+    beamwalk_fits         = aberrconfig['beamwalk_fits']
+    beamwalk_opd_file     = aberrconfig['beamwalk_opd_file']
+    beamwalk_ampl_file    = aberrconfig['beamwalk_ampl_file']
     ### -- Atmospheric Refraction
     atm_refrac_ON     = aberrconfig['atm_refrac_ON']
     post_ADC_ON       = aberrconfig['post_ADC_ON']
@@ -559,12 +559,12 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
                                               high_freq_cut=grid_width/2.,
                                               pup_radius=pup_diameter/2.)
 
-    ###################### NCPA (phase and amplitude) #######################
-    if ncpa_fits is True :
-        ncpa_opd_cube = fits.getdata(input_directory + ncpa_opd_file)
-        print('Phase NCPA aberration loaded from file '+ ncpa_opd_file)
-        ncpa_ampl_cube = fits.getdata(input_directory + ncpa_ampl_file)
-        print('Amplitude NCPA aberrations loaded from file '+ ncpa_ampl_file)
+    ###################### beamwalk (phase and amplitude) #######################
+    if beamwalk_fits is True :
+        beamwalk_opd_cube = fits.getdata(input_directory + beamwalk_opd_file)
+        print('Beamwalk phase aberration loaded from file '+ beamwalk_opd_file)
+        beamwalk_ampl_cube = fits.getdata(input_directory + beamwalk_ampl_file)
+        print('Beamwalk amplitude aberrations loaded from file '+ beamwalk_ampl_file)
 
     ##################### ATMOSPHERIC REFRACTION ######################
     if atm_refrac_ON is True :
@@ -783,19 +783,19 @@ def run_misthic(parameter_file, do_psf=False, silent=False,
                 rotat_opd_screen_i = rotate_frame(rotat_opd_screen, sub_parangle[t])
 #                rotat_opd_screen_i = rotat_opd_screen.copy()
 
-            if (ncpa_fits is True): # ==== quasi-static NCPA aberration screen
+            if (beamwalk_fits is True): # ==== quasi-static NCPA aberration screen
                 if np.fix(np.abs(sub_zendist[t])) < 60:
                     i0 = np.int32(np.fix(np.abs(sub_zendist[t])))
                     err0 = np.abs(sub_zendist[t]) -i0
                     #print(np.shape(sub_zendist[t]),i0,err0,wave_tab)
-                    ncpa_opd_screen_i = ncpa_opd_cube[i0]*(1.-err0) + ncpa_opd_cube[i0+1]*err0 
-                    ncpa_ampl_screen_i = ncpa_ampl_cube[i0]*(1.-err0) + ncpa_ampl_cube[i0+1]*err0 
+                    ncpa_opd_screen_i = beamwalk_opd_cube[i0]*(1.-err0) + beamwalk_opd_cube[i0+1]*err0 
+                    ncpa_ampl_screen_i = beamwalk_ampl_cube[i0]*(1.-err0) + beamwalk_ampl_cube[i0+1]*err0 
                     #i0 = np.int32(np.round(np.abs(sub_zendist[t])))
                     #ncpa_opd_screen_i = ncpa_opd_cube[i0]
                     #ncpa_ampl_screen_i = ncpa_ampl_cube[i0] 
                 else:
-                    ncpa_opd_screen_i = ncpa_opd_cube[60]
-                    ncpa_ampl_screen_i = ncpa_ampl_cube[60]  
+                    ncpa_opd_screen_i = beamwalk_opd_cube[60]
+                    ncpa_ampl_screen_i = beamwalk_ampl_cube[60]  
 
             #### SPHERE JITTER ###
             if sphere_jitter is True:
