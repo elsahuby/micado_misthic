@@ -46,7 +46,7 @@ def get_frame_center(nyx, centering='FFTSTYLE'):
 
     return (cy,cx)
 
-def rotate_frame(img, angle, interpolation = 'nearest', cyx=None):
+def rotate_frame(img, angle, interpolation = 'lanczos4', cyx=None):
     """
     Rotates the input frame by the given angle (in degrees), around the center
     of the frame by default, or around the given cxy coordinates.
