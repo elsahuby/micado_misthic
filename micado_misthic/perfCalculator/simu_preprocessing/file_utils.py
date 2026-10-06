@@ -319,13 +319,20 @@ def get_initial_sampling_factor(simulation_dir):
 
     Output:
     detector_sampling: float
-        The initial detector sampling factor.
+        The initial detector sampling factor and the wavelength it applies to (minimal lambda simulated instead of centre wavelength)
     """
 
     try:
         config_path = find_input_file(simulation_dir, "*.ini")
         config = ConfigObj(str(config_path))
-        return float(config["detectorconfig"]["detector_sampling"])
+        lbd0 = float(config['waveconfig']['lbd0'])
+        delta_lbd = float(config['waveconfig']['delta_lbd'])
+        n_wave = float(config['waveconfig']['n_wave'])
+        if n_wave > 1 :
+            lbd_min      = np.min(((np.arange(n_wave)+0.5)/(n_wave)-0.5)*delta_lbd + lbd0)
+        else:
+            lbd_min      = np.min(np.array([lbd0]))
+        return float(config["detectorconfig"]["detector_sampling"]), lbd_min
     except (StopIteration, KeyError, TypeError, ValueError) as error:
         raise ValueError(
             f"No valid .ini containing [detectorconfig] detector_sampling "

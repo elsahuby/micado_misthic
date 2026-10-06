@@ -276,7 +276,7 @@ def fft_resize(img_0, lbd0, sampling_misthic, pixscale_in_mas, write_dir=0, plot
     # print("PSF cube shape: ", np.shape(psf))
 
     # Size of resized image (even):
-    dim1 = round(dim/sampling_misthic*lbd0/38.542/4.85*1000./pixscale_in_mas/2)*2
+    dim1 = round(dim/sampling_misthic*lbd0/38.542/4.8481368111*1000./pixscale_in_mas/2)*2
     # dim1 = int(dim * 2)
     # Check:
     if dim1 % 2 != 0:
@@ -321,7 +321,7 @@ def fft_resize(img_0, lbd0, sampling_misthic, pixscale_in_mas, write_dir=0, plot
         
         # Shift image back to center
         shift4 = np.roll(inv, (int(dim1/2), int(dim1/2)), axis=(1, 0))
-        resized_fft[i] = shift4
+        resized_fft[i] = np.float32(np.real(shift4))
         
         
         # # Checking image vals

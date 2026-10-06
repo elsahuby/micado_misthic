@@ -8,6 +8,8 @@ from pathlib import Path
 
 import numpy as np
 from PyQt6.QtWidgets import QApplication, QMessageBox
+from astropy.io import fits
+
 
 from micado_misthic.imgproc import get_circle_mask
 from micado_misthic.utils.obsparams import scale_to_photons
@@ -19,6 +21,7 @@ from micado_misthic.perfCalculator.utils import (
     normalize_by_psf_max,
     reconstruct_coronographic_image,
 )
+from micado_misthic.imgproc import micado_adi
 
 
 class ProcessingMethods:
@@ -185,8 +188,7 @@ class ProcessingMethods:
         planet_adi_sum: ndarray or None
             Final normalized planet image, or None when inputs are unavailable.
         """
-        from micado_misthic.imgproc import micado_adi
-        from astropy.io import fits
+
 
         params = params if params is not None else self.get_parameter_values()
         planet_path = self.get_with_planet_path(params)
@@ -291,7 +293,6 @@ class ProcessingMethods:
         planet_adi_sum: ndarray or None
             Final convolved and normalized planet image.
         """
-        from astropy.io import fits
 
         params = params if params is not None else self.get_parameter_values()
         planet_path = self.get_with_planet_path(params)
@@ -338,7 +339,7 @@ class ProcessingMethods:
                 emission_flux=planet_emission_per_pix,
                 frame_exp_time=frame_exp_time,
                 silent=True,
-            )
+            )  #################Maybe a problem of exp_time here. Muste be hte same than for the star... to be checked.
         else:
             planet_adi_sum = fits.getdata(adi_file)
 
@@ -380,8 +381,6 @@ class ProcessingMethods:
         Output:
         None
         """
-        from micado_misthic.imgproc import micado_adi
-        from astropy.io import fits
 
         params, output_dir, total_time_start = self.initialize_processing_run(
             params, path, apply_noise, "BEFORE", False, output_dir,
@@ -552,7 +551,6 @@ class ProcessingMethods:
         Output:
         None
         """
-        from astropy.io import fits
 
         params, output_dir, total_time_start = self.initialize_processing_run(
             params, path, apply_noise, "AFTER", True, output_dir,

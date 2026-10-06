@@ -1,5 +1,5 @@
 """
-Author: Tristan Deseine
+Author: Tristan Deseine, Pierre Baudoz
 """
 
 import os
@@ -18,7 +18,7 @@ D = 38.542  # Telescope diameter in meters.
 def resampling(
         output_main_directory,
         input_directory,
-        sampling_factor,
+        sampling_in_mas,
         planet_on,
         corono=None,
         ncpa=None,
@@ -35,14 +35,15 @@ def resampling(
         The root directory where the resampled simulations will be saved.
     input_directory: str
         The root directory containing the input simulation branches.
-    sampling_factor: list
+    sampling_in_mas: list
         The list of target pixel scales in milliarcseconds per pixel
         (e.g. [1.5, 4.0]).
     planet_on: int
         Select simulations with a planet (1) or without a planet (0).
         Simulations with a planet are identified by a p_dist_mas=... directory
         in their path. This parameter also determines whether outputs are stored
-        under With_Planet or No_Planet.
+        under With_Planet or No_Planet. Planet data has a smaller FOV => resampling
+        is different (using MFT to keep the same resampling than the star images)
     corono: str or None
         The requested coronagraph identifier (e.g. "CLC1"), or None to accept
         any coronagraph.
@@ -74,7 +75,7 @@ def resampling(
         )
 
         try:
-            initial_sampling_factor = get_initial_sampling_factor(simulation_path)
+            initial_sampling_factor, lbd_min = get_initial_sampling_factor(simulation_path)
         except ValueError as error:
             print(f"Skipping folder {simulation_path}: {error}")
             continue
@@ -102,8 +103,8 @@ def resampling(
                 print(f"Skipping file {image_path}: no data in FITS")
                 continue
 
-            for sf in sampling_factor:
-                if wavelength * 10**-6 / D * 2.063 * 10**8 < 2 * sf:
+            for sf in sampling_in_mas:
+                if lbd_min * 10**-6 / D * 2.062648 * 10**8 < 2 * sf:
                     print(
                         f"Sampling {sf} mas is not achievable for "
                         f"{wavelength} microns. Skipping.")
@@ -128,7 +129,7 @@ def resampling(
                     f"to {sf} mas.")
                 resizeddata, _ = fft_resize(
                     image_data,
-                    wavelength,
+                    lbd_min,
                     initial_sampling_factor,
                     sf,
                     write_dir=0,
