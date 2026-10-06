@@ -56,7 +56,7 @@ def get_radial_profile(img, nbin=1, centering='FFTSTYLE', cyx=None, mask=None):
             profile[k] = np.sum(img*M) / npix
             xvector[k] = np.sum(r*M) / npix
         else :
-            profile[k] = np.NaN
+            profile[k] = np.nan
 
     return profile, xvector
 
@@ -115,7 +115,7 @@ def get_rms_contrast(img, nbin=1, centering='FFTSTYLE', cyx=None, mask=None):
             contrast[k] = np.std(img[ind_M])
             xvector[k] = np.sum(r*M) / npix
         else :
-            contrast[k] = np.NaN
+            contrast[k] = np.nan
 
     return contrast, xvector
 
@@ -174,7 +174,7 @@ def get_radial_minmax_profile(img, nbin=1, centering='FFTSTYLE', cyx=None, mask=
             profile_max[k] = np.max(img[ind_M])
             xvector[k] = np.sum(r*M) / npix
         else :
-            profile_min[k] = np.NaN
-            profile_max[k] = np.NaN
+            profile_min[k] = np.nan
+            profile_max[k] = np.nan
 
     return profile_min, profile_max, xvector
