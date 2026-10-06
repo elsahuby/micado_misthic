@@ -41,7 +41,7 @@ def main():
         run_resampling(
             output_main_directory=output_resampled_path,
             input_directory=simulation_data_path,
-            sampling_factor=sampling_factor,
+            sampling_in_mas=sampling_in_mas,
             planet_on=planet_on,
             corono=None,
             ncpa=None,
@@ -89,7 +89,10 @@ def main():
                 perfect_psf_output_path = output_dir / perfect_psf_path.name
                 if not perfect_psf_output_path.is_file():
                     shutil.copy2(perfect_psf_path, perfect_psf_output_path)
+                max_perf_psf= np.max(np.asarray(fits.getdata(perfect_psf_path)))
+                sum_perf_psf= np.sum(np.asarray(fits.getdata(perfect_psf_path)))
 
+                print(max_perf_psf,sum_perf_psf)
                 if all(path.is_file() for path in (adi_output_path, psf_output_path, mean_output_path)):
                     print(f"ADI, PSF et moyenne {duration_label} deja crees, traitement ignore : {output_dir}")
                     continue
@@ -100,13 +103,13 @@ def main():
 
                 if not mean_output_path.is_file():
                     header = fits.Header({"NFRAMES": len(cube)})
-                    fits.writeto(mean_output_path, np.mean(np.abs(cube), axis=0).astype(np.float32),
+                    fits.writeto(mean_output_path, (np.mean(np.abs(cube), axis=0)/max_perf_psf).astype(np.float32),
                                  header=header)
                     print(f"Moyenne enregistree : {mean_output_path}")
 
                 if not adi_output_path.is_file() or not psf_output_path.is_file():
                     if full_psf_cube is None:
-                        full_psf_cube = np.asarray(fits.getdata(psf_path))
+                        full_psf_cube = np.asarray(fits.getdata(psf_path))/max_perf_psf
                     psf_cube, _ = select_observation_time(minutes, full_psf_cube, full_angles, delta_t)
                     with TemporaryDirectory() as parangle_dir:
                         np.savetxt(Path(parangle_dir) / "selected_parangle_tab.txt", angles, header="a")
