@@ -125,9 +125,10 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         }
         self.clc_combo = QComboBox()
         self.clc_combo.addItems(["CLC15", "CLC25", "CLC50"])
+        self.clc_combo.setCurrentText("CLC25")
 
         self.ncpa_combo = QComboBox()
-        self.ncpa_combo.addItems(["Yes", "No"])
+        self.ncpa_combo.addItems(["No","Yes"])
 
         self.sampling_combo = QComboBox()
         self.sampling_combo.addItems(["1.5", "4.0"])
@@ -139,28 +140,32 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             "K": ["2.100 µm", "2.150 µm", "2.235 µm"],
         }
         self.filter_wavelength_combo = QComboBox()
+        #self.filter_wavelength_combo.setCurrentText("H:" "1.582 µm")
 
         # Detection noise.
         self.noise_checkbox = QComboBox()
-        self.noise_checkbox.addItems(["No", "Yes"])
+        self.noise_checkbox.addItems(["Yes","No"])
 
         # Observation time.
         self.obs_time_combo = QComboBox()
-        self.obs_time_combo.addItem("Not specified", None)
+        #self.obs_time_combo.addItem("Not specified", None)
         self.obs_time_combo.addItems(["15min", "30min", "1h", "1h30","2h"])
+        self.obs_time_combo.setCurrentText("1h")
         ###
 
         ### Star parameters
         self.seeing_combo = QComboBox()
         self.seeing_combo.addItems(["Q1", "MED", "Q4"])
+        self.seeing_combo.setCurrentText("MED")
 
         # Star magnitude input (real number between 0 and 15)
         self.magnitude_combo = QLineEdit()
-        self.magnitude_combo.setPlaceholderText("0.00 - 15.00")
+        self.magnitude_combo.setPlaceholderText("0.00 - 20.00")
         magnitude_validator = QDoubleValidator(0.0, 15.0, 3, self.magnitude_combo)
         magnitude_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
         magnitude_validator.setLocale(QLocale(QLocale.Language.C))
         self.magnitude_combo.setValidator(magnitude_validator)
+        #self.magnitude_combo.setText("0")
 
         self.declination_combo = QLineEdit()
         self.declination_combo.setPlaceholderText("-90° - 90°")
@@ -168,6 +173,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         declination_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
         declination_validator.setLocale(QLocale(QLocale.Language.C))
         self.declination_combo.setValidator(declination_validator)
+        self.declination_combo.setText("0.0")
 
 
         # Flux folder label (auto-detected from the base folder).
@@ -190,7 +196,8 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         # Delta magnitude between the star and the planet.
         self.delta_mag_combo = QLineEdit()
         self.delta_mag_combo.setPlaceholderText("0.00 - 20.00")
-        delta_mag_validator = QDoubleValidator(0.0, 20.0, 3, self.delta_mag_combo)
+        self.delta_mag_combo.setText("0")
+        delta_mag_validator = QDoubleValidator(0.0, 20.1, 3, self.delta_mag_combo)
         delta_mag_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
         delta_mag_validator.setLocale(QLocale(QLocale.Language.C))
         self.delta_mag_combo.setValidator(delta_mag_validator)
@@ -222,13 +229,10 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         star_layout = QGridLayout(star_tab)
         star_layout.setHorizontalSpacing(12)
         star_layout.setVerticalSpacing(8)
-        star_layout.addWidget(QLabel("Seeing:"), 0, 0)
-        star_layout.addWidget(self.seeing_combo, 0, 1)
         star_layout.addWidget(QLabel("Magnitude:"), 1, 0)
         star_layout.addWidget(self.magnitude_combo, 1, 1)
         star_layout.addWidget(QLabel("Declination:"), 2, 0)
         star_layout.addWidget(self.declination_combo, 2, 1)
-
         star_layout.addWidget(QLabel("Flux folder:"), 3, 0)
         star_layout.addWidget(self.flux_folder_label, 3, 1)
 
@@ -283,7 +287,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         left_layout.addWidget(post_title)
 
         self.adi_checkbox = QComboBox()
-        self.adi_checkbox.addItems(["No", "Yes"])
+        self.adi_checkbox.addItems(["Yes", "No"])
         self.adi_checkbox.currentTextChanged.connect(self.on_adi_changed)
         self.adi_enabled = False
 
