@@ -283,7 +283,7 @@ class ParameterPathMethods:
             "wavelength": float(wavelength.replace("µm", "").strip()),
             "sampling": float(self.sampling_combo.currentText()),
             "observation_time": self.get_selected_observation_time(),
-            "noise": self.noise_checkbox.currentText() == "Yes",
+            "noise": True,#self.noise_checkbox.currentText() == "Yes",
             "save_adi": self.save_adi_checkbox.currentText() == "Yes",
             "base_folder": self.base_folder,
             "flux_folder": self.flux_folder,
@@ -300,7 +300,7 @@ class ParameterPathMethods:
 
         if validate:
             if params["noise"] and params["magnitude"] is None:
-                raise ValueError("A star magnitude is required for noise.")
+                raise ValueError("A star magnitude is required for noise calculation.")
             if params["planet"] == "With_Planet" and params["delta_magnitude"] is None:
                 raise ValueError("A delta magnitude is required for the planet.")
         return params
@@ -363,9 +363,6 @@ class ParameterPathMethods:
             Directory names in lookup order.
         """
         candidates = [clc]
-        legacy_clc = self.clc_legacy_folder_map.get(clc)
-        if legacy_clc is not None:
-            candidates.append(legacy_clc)
         return candidates
 
     def resolve_clc_folder(self, parent_folder, clc):
