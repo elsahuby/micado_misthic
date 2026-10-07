@@ -98,8 +98,6 @@ class ProcessingMethods:
             raise FileNotFoundError("Could not find the preprocessed *_ADI_sum.fits / *_PSF_sum.fits pair.")
         if require_noise_inputs and files["mean"] is None:
             raise FileNotFoundError("Could not find the matching *_image_cube_mean.fits produced during preprocessing.")
-        if require_noise_inputs and files["perfect_psf"] is None:
-            raise FileNotFoundError("Could not find the perfect_psf file required to add noise.")
         return files
 
     def finish_planet_processing(self, planet_adi_sum, output_dir, message="Planet ADI completed."):
@@ -199,17 +197,9 @@ class ProcessingMethods:
         input_files = find_simulation_fits(planet_path)
         cube_file = input_files["image_cube"]
         psf_cube_file = input_files["psf_cube"]
-        perf_psf_file = input_files["perfect_psf"]
         if cube_file is None or psf_cube_file is None:
             self.files_box.append(
                 "Warning: Could not find image_cube or psf_cube in "
-                f"{planet_path}. Skipping planet ADI."
-            )
-            return None
-
-        if apply_photon_noise and perf_psf_file is None:
-            self.files_box.append(
-                "Warning: Could not find perfect_psf in "
                 f"{planet_path}. Skipping planet ADI."
             )
             return None
@@ -228,7 +218,7 @@ class ProcessingMethods:
                 raise ValueError("delta_t and zenith_distance are required for planet photon noise.")
 
             self.files_box.append("Creating planet cubes with photon noise and no read noise...")
-            perf_psf_data = np.asarray(fits.getdata(str(perf_psf_file)), dtype=np.float32)
+            perf_psf_data = fits.getheader(cube_file)["S_PERPSF"]
             frame_exp_time = np.float32(delta_t)
             planet_photon_flux, planet_emission_per_pix, _ = self.get_planet_micado_flux(
                 path=planet_path,
@@ -237,7 +227,7 @@ class ProcessingMethods:
                 params=params,
             )
 
-            cube_data, _, _ = scale_to_photons(
+            cube_data, _ = scale_to_photons(
                 cube_data,
                 perf_psf_data,
                 planet_photon_flux,
@@ -247,7 +237,7 @@ class ProcessingMethods:
                 no_noise=False,
                 silent=True,
             )
-            psf_cube_data, _, _ = scale_to_photons(
+            psf_cube_data, _ = scale_to_photons(
                 psf_cube_data,
                 perf_psf_data,
                 planet_photon_flux,
@@ -307,7 +297,6 @@ class ProcessingMethods:
         except FileNotFoundError as error:
             self.files_box.append(f"Warning: {error} Folder: {planet_path}")
             return None
-        perf_psf_file = input_files["perfect_psf"]
         adi_file = input_files["adi_sum"]
         mean_file = input_files["mean"]
 
@@ -321,7 +310,7 @@ class ProcessingMethods:
             self.files_box.append(
                 "Adding photon and emission noise to the preprocessed planet ADI..."
             )
-            perf_psf_data = np.asarray(fits.getdata(str(perf_psf_file)), dtype=np.float32)
+            perf_psf_data = fits.getheader(adi_file)["S_PERPSF"]
             frame_exp_time = np.float32(delta_t)
             planet_photon_flux, planet_emission_per_pix, _ = self.get_planet_micado_flux(
                 path=planet_path,
@@ -388,21 +377,12 @@ class ProcessingMethods:
         input_files = find_simulation_fits(path)
         cube_file = input_files["image_cube"]
         psf_cube_file = input_files["psf_cube"]
-        perf_psf_file = input_files["perfect_psf"]
 
         if cube_file is None or psf_cube_file is None:
             QMessageBox.warning(
                 self,
                 "Incomplete ADI files",
                 "Could not find image_cube or psf_cube files in the selected folder.",
-            )
-            return
-
-        if apply_noise and perf_psf_file is None:
-            QMessageBox.warning(
-                self,
-                "Incomplete noise files",
-                "Could not find perfect_psf file in the selected folder. Noise cannot be applied.",
             )
             return
 
@@ -415,11 +395,8 @@ class ProcessingMethods:
 
         cube_data = np.asarray(fits.getdata(str(cube_file)), dtype=np.float32)
         psf_cube_data = np.asarray(fits.getdata(str(psf_cube_file)), dtype=np.float32)
-        perf_psf_data = (
-            np.asarray(fits.getdata(str(perf_psf_file)), dtype=np.float32)
-            if perf_psf_file is not None
-            else None
-        )
+        perf_psf_data = fits.getheader(cube_file)["S_PERPSF"]
+
         noise_applied = False
         planet_noise_params = None
 
@@ -464,7 +441,7 @@ class ProcessingMethods:
 
                     self.files_box.append("Creating image and PSF cubes with photon noise...")
                     start_time_image_noise = time.time()
-                    image_cube_noise, _, _ = scale_to_photons(
+                    image_cube_noise, _ = scale_to_photons(
                         cube_data,
                         perf_psf_data,
                         photon_flux,
@@ -478,7 +455,7 @@ class ProcessingMethods:
                     print(f"Image cube with photon noise created in {ellapsed_image_noise:.2f} s.")
 
                     start_time_psf_noise = time.time()
-                    psf_cube_noise, _, _ = scale_to_photons(
+                    psf_cube_noise, _ = scale_to_photons(
                         psf_cube_data,
                         perf_psf_data,
                         photon_flux,
@@ -566,7 +543,6 @@ class ProcessingMethods:
                 f"Folder: {path}\n{error}",
             )
             return
-        perf_psf_file = input_files["perfect_psf"]
         adi_file, psf_sum_file = input_files["adi_sum"], input_files["psf_sum"]
         mean_file = input_files["mean"]
 
@@ -574,11 +550,8 @@ class ProcessingMethods:
         QApplication.processEvents()
         start_time = time.time()
 
-        perf_psf_data = (
-            np.asarray(fits.getdata(str(perf_psf_file)), dtype=np.float32)
-            if perf_psf_file is not None
-            else None
-        )
+        perf_psf_data = fits.getheader(adi_file)["S_PERPSF"]
+
         noise_applied = False
         noise_parameters = None
         planet_noise_params = None
@@ -638,7 +611,7 @@ class ProcessingMethods:
                 QMessageBox.warning(self, "Invalid noise inputs", str(error))
                 return
             psf_sum = np.asarray(fits.getdata(psf_sum_file), dtype=np.float64)
-            psf_sum *= noise_parameters["photon_flux"] / np.sum(perf_psf_data)
+            psf_sum *= noise_parameters["photon_flux"] / perf_psf_data
         else:
             adi_sum = fits.getdata(adi_file)
             psf_sum = fits.getdata(psf_sum_file)
