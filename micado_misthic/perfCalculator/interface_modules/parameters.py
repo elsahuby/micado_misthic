@@ -363,9 +363,6 @@ class ParameterPathMethods:
             Directory names in lookup order.
         """
         candidates = [clc]
-        legacy_clc = self.clc_legacy_folder_map.get(clc)
-        if legacy_clc is not None:
-            candidates.append(legacy_clc)
         return candidates
 
     def resolve_clc_folder(self, parent_folder, clc):

@@ -2,6 +2,7 @@
 Author: Tristan Deseine
 """
 
+import os
 import sys
 import ast
 import inspect
@@ -42,6 +43,77 @@ from micado_misthic.perfCalculator.interface_modules.output import OutputMethods
 from micado_misthic.perfCalculator.interface_modules.processing import ProcessingMethods
 from micado_misthic.perfCalculator.interface_modules.plotting import PlottingMethods
 
+def scan_combinations(root, depth, skip=()):
+    """Retourne l'ensemble des combinaisons valides.
+
+    depth : nombre total de niveaux dans l'arborescence (niveaux ignorés inclus)
+    skip  : indices (à partir de 0) des niveaux à ignorer
+    """
+    combos = set()
+
+    def rec(path, level, parts):
+        if level == depth:
+            combos.add(parts)
+            return
+        last = level == depth - 1
+        for name in os.listdir(path):
+            if name.startswith("."):          # .DS_Store, etc.
+                continue
+            full = os.path.join(path, name)
+            if os.path.isdir(full) or last:
+                if level in skip:
+                    rec(full, level + 1, parts)
+                else:
+                    value = os.path.splitext(name)[0] if (last and os.path.isfile(full)) else name
+                    rec(full, level + 1, parts + (value,))
+
+    rec(root, 0, ())
+    return combos
+
+def filter_folder(text):
+    """'H - 1.582 µm' -> 'filter1.582'"""
+    try:
+        return "filter" + text.split(" - ")[1].split()[0]
+    except IndexError:
+        return text
+
+class ParamAvailability:
+    """Grise dans chaque combo les valeurs incompatibles avec les autres choix."""
+    def __init__(self, combinations, widgets, converters=None):
+        self.combinations = combinations
+        self.widgets = widgets
+        self.converters = converters or [None] * len(widgets)
+        for w in widgets:
+            w.currentTextChanged.connect(self.update)
+        self.update()
+
+    def _value(self, i, text):
+        conv = self.converters[i]
+        return conv(text) if conv else text
+    
+    def set_combinations(self, combinations):
+        self.combinations = combinations
+        self.update()
+
+    def update(self):
+        n = len(self.widgets)
+        has_data = bool(self.combinations)
+        for w in self.widgets:
+            w.setEnabled(has_data)           # all grey until a valid folder is scanned
+        if not has_data:
+            return
+        current = [w.currentText() for w in self.widgets]
+        for i, w in enumerate(self.widgets):
+            allowed = {
+                c[i] for c in self.combinations
+                if all(
+                    c[j] == self._value(j, current[j])
+                    for j in range(n) if j != i and current[j]
+                )
+            }
+            model = w.model()
+            for k in range(w.count()):
+                model.item(k).setEnabled(self._value(i, w.itemText(k)) in allowed)
 
 class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMethods, PlottingMethods, QWidget):
     """Qt interface for selecting, processing and displaying ADI simulations."""
@@ -118,11 +190,6 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         ###
 
         ### Instrument parameters
-        self.clc_legacy_folder_map = {
-            "CLC15": "CLC0",
-            "CLC25": "CLC1",
-            "CLC50": "CLC2",
-        }
         self.clc_combo = QComboBox()
         self.clc_combo.addItems(["CLC15", "CLC25", "CLC50"])
         self.clc_combo.setCurrentText("CLC25")
@@ -221,10 +288,9 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         instrument_layout.addWidget(self.sampling_combo, 3, 1)
         instrument_layout.addWidget(QLabel("Filter / Wavelength:"), 4, 0)
         instrument_layout.addWidget(self.filter_wavelength_combo, 4, 1)
-        instrument_layout.addWidget(QLabel("Detection noise:"), 5, 0)
-        instrument_layout.addWidget(self.noise_checkbox, 5, 1)
-        instrument_layout.addWidget(QLabel("Observation time:"), 6, 0)
-        instrument_layout.addWidget(self.obs_time_combo, 6, 1)
+        instrument_layout.addWidget(QLabel("Observation time:"), 5, 0)
+        instrument_layout.addWidget(self.obs_time_combo, 5, 1)
+
 
         # Star tab.
         star_tab = QWidget()
@@ -446,6 +512,28 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         self.update_filter_wavelength_options()
         self.update_save_controls()
 
+
+        '''try:
+            combos = scan_combinations(self.base_folder, depth=7,skip=(3,))
+        except OSError as e:
+            combos = set()
+            print("Scan impossible :", e)
+
+        if combos:'''
+        self.availability = ParamAvailability(
+            set(),
+            [self.clc_combo, self.ncpa_combo, self.seeing_combo,
+            self.filter_wavelength_combo, self.sampling_combo, self.obs_time_combo],
+            converters=[
+                None,
+                {"No": "NoNCPA", "Yes": "NCPA"}.get,
+                None,
+                filter_folder,
+                lambda t: f"Samp{t}",
+                None,
+            ],
+        )
+
     def get_user_function_map(self):
         """
         Collect public functions exposed by ``user_func``.
@@ -459,6 +547,16 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             for name, func in inspect.getmembers(user_functions, inspect.isfunction)
             if func.__module__ == user_functions.__name__ and not name.startswith("_")
         }
+
+    def refresh_availability(self):
+        """Rescan the simulation tree and grey out impossible parameter values."""
+        root = self.base_folder / "No_Planet"      # adjust, see note below
+        try:
+            combos = scan_combinations(str(root), depth=7, skip=(3,))
+        except OSError as e:
+            combos = set()
+            self.files_box.append(f"Tree scan impossible: {e}")
+        self.availability.set_combinations(combos)
 
     def parse_function_arguments(self, argument_text):
 
@@ -511,6 +609,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             self.folder_label.setText(f"Base folder: {folder}")
             self.auto_detect_flux_folder()
             self.update_paths()
+            self.refresh_availability()
 
     def open_help(self):
         """Open or select the closable Markdown user-guide tab.
