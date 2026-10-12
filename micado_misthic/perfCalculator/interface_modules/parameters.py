@@ -325,11 +325,9 @@ class ParameterPathMethods:
         if params["declination"] is not None:
             zenith = self.compute_nearest_zenithal_distance(params["declination"])
             input_path /= f"z={zenith:g}"
-        input_path /= f"filter{params['wavelength']:.3f}"
+        input_path /= f"filter{params['wavelength']:.3f}/Samp{params['sampling']}"
         if planet_folder == "With_Planet":
-            input_path /= f"p_dist_mas={params['planet_distance']:g}/Samp{params['sampling']}"
-        else:
-            input_path /= f"samp{params['sampling']}"
+            input_path /= f"p_dist_mas={params['planet_distance']:g}"
         return input_path / params["observation_time"] if params["observation_time"] else input_path
 
     def update_paths(self, *_):

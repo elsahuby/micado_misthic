@@ -22,25 +22,26 @@ from micado_misthic.perfCalculator.simu_preprocessing.resampling import resampli
 
 
 # Select the processing steps.
-resampling = False#False
-ADI = True#False#True
+resampling = False
+ADI = True#True
 
-simulation_data_path = r'/Volumes/MICADO_Back/Test_atraiter'#/Volumes/MICADO_Back/2026/CLC50_noNCPA_5Hz_Med/z=20'
-output_resampled_path = r'/Volumes/TristanMIC2/Resampled2026_2'#/Volumes/MICADO_Back/TMP'  
-planet_on = 0
+simulation_data_dir = r'/Volumes/MICADO_Back/Test_atraiter/Planet'#/Volumes/MICADO_Back/Test_atraiter'#/Volumes/MICADO_Back/2026/CLC50_noNCPA_5Hz_Med/z=20'
+resampled_output_dir = r'/Volumes/TristanMIC2/Resampled_test'#/Volumes/MICADO_Back/TMP'  
+ADI_output_dir = r'/Volumes/TristanMIC2/ADI_oct26_test2'
+planet_on = 1
 sampling_in_mas = [1.5, 4.0]
 
 planet_directory = 'With_Planet' if planet_on == 1 else 'No_Planet'
-ADI_input_path = Path(output_resampled_path) / planet_directory
-ADI_output_path = Path(r'/Volumes/TristanMIC2/ADI_oct26') / planet_directory
+ADI_input_path = Path(resampled_output_dir) / planet_directory
+ADI_output_path = Path(ADI_output_dir) / planet_directory
 OBSERVATION_TIMES = (15, 30, 60, 90, 120)  #in minutes
 
 
 def main():
     if resampling:
         run_resampling(
-            output_main_directory=output_resampled_path,
-            input_directory=simulation_data_path,
+            output_main_directory=resampled_output_dir,
+            input_directory=simulation_data_dir,
             sampling_in_mas=sampling_in_mas,
             planet_on=planet_on,
             corono=None,
@@ -70,7 +71,7 @@ def main():
             full_psf_cube = None
 
             for minutes in OBSERVATION_TIMES:
-                cube, angles = select_observation_time(minutes, full_cube, full_angles, delta_t)
+                cube, angles,first_frame = select_observation_time(minutes, full_cube, full_angles, delta_t)
 
                 effective_seconds = len(cube) * delta_t
                 duration_label = format_observation_time(effective_seconds)
@@ -99,7 +100,9 @@ def main():
                 np.savetxt(output_dir / parangle_path.name, angles, header="a")
 
                 if not mean_output_path.is_file():
-                    header = fits.Header({"NFRAMES": len(cube)})
+                    header = fits.Header()
+                    header["NFRAMES"] = (len(cube), "number of frames in the cube")
+                    header["FRAME0"] = (first_frame, "first frame")
                     fits.writeto(mean_output_path, (np.mean(np.abs(cube), axis=0)/max_perf_psf).astype(np.float32),
                                  header=header)
                     print(f"Moyenne enregistree : {mean_output_path}")
@@ -107,7 +110,7 @@ def main():
                 if not adi_output_path.is_file() or not psf_output_path.is_file():
                     if full_psf_cube is None:
                         full_psf_cube = np.asarray(fits.getdata(psf_path))/max_perf_psf
-                    psf_cube, _ = select_observation_time(minutes, full_psf_cube, full_angles, delta_t)
+                    psf_cube, _, _ = select_observation_time(minutes, full_psf_cube, full_angles, delta_t)
                     with TemporaryDirectory() as parangle_dir:
                         np.savetxt(Path(parangle_dir) / "selected_parangle_tab.txt", angles, header="a")
                         adi_sum, psf_sum = micado_adi(cube, psf_cube, parangle_dir + os.sep)
@@ -119,24 +122,26 @@ def main():
                 print(f"Produits {duration_label} completes dans : {output_dir}")
 
             # Keeping a cropped value of the psf cubes for simulation of planet at distances >80 mas
-            outputplanet_dir = ADIplanet_output_path / cube_path.parent.relative_to(ADI_input_path)
-            outputplanet_dir.mkdir(parents=True, exist_ok=True)
-         
-            parts = Path(cube_path.parent).parts
-            z = float(next(p for p in parts if p.startswith("z=")).split("=")[1])        # 20.0
-            lbd_filter = float(next(p for p in parts if p.startswith("filter")).removeprefix("filter"))  # 1.247
-            sampling = float(parts[-1].removeprefix("Samp"))   
-            dim_small = round(lbd_filter / 38.542 * 0.2062648 *1000./sampling *20.)*2 # keeping only a field of 20x20 lbd/D for planet simulation
-            print(z,lbd_filter,sampling,dim_small) 
-            full_psf_cube = np.asarray(fits.getdata(psf_path))/max_perf_psf
-            dim_psf = len(full_psf_cube[0])
-            small_fov_psf_cube_path = outputplanet_dir / "small_FOV_PSF_cube.fits"
-            print(dim_psf,dim_small,small_fov_psf_cube_path)
-            small_fov_psf_cube = full_psf_cube[:,dim_psf//2-dim_small//2:dim_psf//2+dim_small//2,dim_psf//2-dim_small//2:dim_psf//2+dim_small//2]
-            print(dim_psf,small_fov_psf_cube_path)
-            header = fits.Header()
-            header["S_PERPSF"] = sum_perf_psf
-            fits.writeto(small_fov_psf_cube_path, small_fov_psf_cube.astype(np.float32), header=header)
+            if planet_on == 0:
+                ADIplanet_output_path = Path(ADI_output_dir) / "With_Planet"
+                outputplanet_dir = ADIplanet_output_path / cube_path.parent.relative_to(ADI_input_path)
+                outputplanet_dir.mkdir(parents=True, exist_ok=True)
+            
+                parts = Path(cube_path.parent).parts
+                z = float(next(p for p in parts if p.startswith("z=")).split("=")[1])        # 20.0
+                lbd_filter = float(next(p for p in parts if p.startswith("filter")).removeprefix("filter"))  # 1.247
+                sampling = float(parts[-1].removeprefix("Samp"))   
+                dim_small = round(lbd_filter / 38.542 * 0.2062648 *1000./sampling *20.)*2 # keeping only a field of 20x20 lbd/D for planet simulation
+                print(z,lbd_filter,sampling,dim_small) 
+                full_psf_cube = np.asarray(fits.getdata(psf_path))/max_perf_psf
+                dim_psf = len(full_psf_cube[0])
+                small_fov_psf_cube_path = outputplanet_dir / "small_FOV_PSF_cube.fits"
+                print(dim_psf,dim_small,small_fov_psf_cube_path)
+                small_fov_psf_cube = full_psf_cube[:,dim_psf//2-dim_small//2:dim_psf//2+dim_small//2,dim_psf//2-dim_small//2:dim_psf//2+dim_small//2]
+                print(dim_psf,small_fov_psf_cube_path)
+                header = fits.Header()
+                header["S_PERPSF"] = sum_perf_psf
+                fits.writeto(small_fov_psf_cube_path, small_fov_psf_cube.astype(np.float32), header=header)
 
 if __name__ == "__main__":
     main()

@@ -173,17 +173,17 @@ def run_adi_without_noise(cube, psf_cube, parallactic_dir, adi_file=None):
     else:
         adi_sum, _ = micado_adi(cube, psf_cube, str(parallactic_dir) + os.sep)
         fits.writeto(adi_file, adi_sum, overwrite=False)
-    noise_info = {
+    file_info = {
         "n_frames": cube.shape[0],
         "mean_abs_cube": np.mean(np.abs(cube), axis=0),
     }
-    return adi_sum, noise_info
+    return adi_sum, file_info
 
 
 def add_noise_after_adi(
     adi_sum,
     perf_psf,
-    noise_info,
+    file_info,
     photon_flux,
     sig_ron,
     emission_flux,
@@ -192,15 +192,16 @@ def add_noise_after_adi(
     silent=True,
 ):
     """Add noise using a noise-info dict or the path to an image_cube_mean FITS."""
-    if isinstance(noise_info, (str, Path)):
-        with fits.open(noise_info) as hdul:
+    if isinstance(file_info, (str, Path)):
+        with fits.open(file_info) as hdul:
             mean_hdu = hdul["MEAN_ABS"] if "MEAN_ABS" in hdul else hdul[0]
-            noise_info = {
+            file_info = {
                 "n_frames": hdul[0].header["NFRAMES"],
                 "mean_abs_cube": np.asarray(mean_hdu.data, dtype=np.float64),
             }
-    n_frames = noise_info["n_frames"]
-    mean_abs_cube = noise_info["mean_abs_cube"]
+    n_frames = file_info["n_frames"]
+    mean_abs_cube = file_info["mean_abs_cube"]
+    print(np.shape(mean_abs_cube), np.shape(adi_sum))
     if np.shape(mean_abs_cube) != np.shape(adi_sum):
         raise ValueError("Mean image and ADI image must have the same dimensions.")
     if not np.isfinite(n_frames) or n_frames <= 0 or int(n_frames) != n_frames:
