@@ -286,6 +286,7 @@ class ProcessingMethods:
 
         params = params if params is not None else self.get_parameter_values()
         planet_path = self.build_input_path("No_Planet", params)
+        # Case of planet distant enough so that coronagraph have small impact on it
         if params["planet_distance"] > 70:
             planet_path = self.build_input_path("With_Planet", params)
             path_no = self.build_input_path("No_Planet", params)
@@ -308,7 +309,7 @@ class ProcessingMethods:
             mean_planet = np.mean(planet_cube,axis=0)
             planet_cube_dummy = planet_cube.copy()
             for i in np.arange(n_frames):
-                    planet_cube_dummy[i] = rotate_frame(planet_cube[i]-mean_planet, angles_para[i])
+                planet_cube_dummy[i] = rotate_frame(planet_cube[i]-mean_planet, angles_para[i])
             planet_cube_adi = np.sum(planet_cube_dummy, axis=0)
             # Mean of derotated images
             mean_planet_adi = np.sum(planet_cube, axis=0)

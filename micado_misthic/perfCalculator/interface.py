@@ -516,7 +516,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         self.obs_time_combo.currentTextChanged.connect(self.update_paths)
         self.filter_wavelength_combo.currentTextChanged.connect(self.update_paths)
         self.sampling_combo.currentTextChanged.connect(self.update_filter_wavelength_options)
-        self.declination_combo.textChanged.connect(self.update_paths)
+        self.declination_combo.editingFinished.connect(self.update_paths_zenith)
         self.Distance_combo.currentTextChanged.connect(self.update_paths)
         self.planet_on_checkbox.stateChanged.connect(self.update_paths)
         self.planet_on_checkbox.stateChanged.connect(self.update_planet_controls)

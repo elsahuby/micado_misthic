@@ -3,7 +3,7 @@ Author: Tristan Deseine
 """
 
 import os
-
+import html
 import numpy as np
 
 from micado_misthic.perfCalculator.utils import get_planet_flux_with_deltaMag
@@ -13,6 +13,7 @@ from micado_misthic.utils.obsparams import (
     get_star_spectrum,
 )
 
+Z_FALLBACK = 20
 
 class ParameterPathMethods:
     """Parameter, flux and simulation-path helpers for the interface."""
@@ -59,7 +60,7 @@ class ParameterPathMethods:
             self.flux_folder = None
             self.flux_folder_label.setText("not found")
 
-    def compute_nearest_zenithal_distance(self, declination):
+    def compute_nearest_zenithal_distance(self, declination,log=False):
 
         """
         Compute the nearest zenithal distance based on declination and the latitude.
@@ -74,37 +75,29 @@ class ParameterPathMethods:
         """
 
         z_reference = np.array([20., 40.])
-
         latitude = -24.5 
-
-
         z_meridien = np.abs(latitude - float(declination))
-
-
         nearest_z = float(z_reference[np.argmin(abs(z_reference - z_meridien))])
-        self.files_box.append(
-            f"Nearest zenithal distance for declination {declination} "
-            f"and latitude {latitude} is {nearest_z:g}"
-        )
+        if log:
+            self.files_box.append(
+                f"Nearest zenithal distance for declination {declination} "
+                f"and latitude {latitude} is {nearest_z:g}"
+            )
         return nearest_z
 
     def get_selected_observation_time(self):
         """
         Return the selected observation-time directory label.
-
         Output:
         observation_time: str or None
             Selected label, or None when unspecified.
         """
-        if self.obs_time_combo.currentIndex() == 0:
-            return None
         obs_time_text = self.obs_time_combo.currentText()
         return obs_time_text if obs_time_text else None
 
     def get_star_spectrum(self, star_mag=None, wavelength=None, display_plot=False, params=None):
         """
         Compute the selected stellar spectrum using obsparams.get_star_spectrum().
-
         Input:
         star_mag: float, optional
             Stellar magnitude; defaults to the parameters collected when processing started.
@@ -324,6 +317,7 @@ class ParameterPathMethods:
         input_path = input_root / self.resolve_clc_folder(input_root, params["clc"]) / params["ncpa"] / params["seeing"]
         if params["declination"] is not None:
             zenith = self.compute_nearest_zenithal_distance(params["declination"])
+            zenith = self.check_zenith_folder(input_path, zenith)
             input_path /= f"z={zenith:g}"
         input_path /= f"filter{params['wavelength']:.3f}/Samp{params['sampling']}"
         if planet_folder == "With_Planet":
@@ -348,6 +342,13 @@ class ParameterPathMethods:
             return  # A numeric field can be incomplete while the user is typing.
         self.no_planet_path = self.build_input_path("No_Planet", params)
         self.path_box.setText(str(self.no_planet_path) + os.sep)
+
+    def update_paths_zenith(self, *_):
+        """Refresh the input path preview after a relevant UI change."""
+        self.update_paths()
+        text = self.declination_combo.text().strip()
+        if text and self.declination_combo.hasAcceptableInput():
+            self.compute_nearest_zenithal_distance(float(text), log=True)
 
     def get_clc_folder_candidates(self, clc):
         """Return current and legacy directory names for a coronagraph.
@@ -380,3 +381,31 @@ class ParameterPathMethods:
             if (parent_folder / candidate).exists():
                 return candidate
         return clc
+
+    def log_warning_once(self, message):
+        """Écrit un avertissement rouge dans files_box, une seule fois par message."""
+        warned = self.__dict__.setdefault("_warned_messages", set())
+        if message in warned:
+            return
+        warned.add(message)
+        self.files_box.append(
+            f'<span style="color:red;">Warning: {html.escape(message)}</span>'
+        )
+
+    def check_zenith_folder(self, parent, zenith):
+        """Vérifie que z=<zenith> existe dans parent, sinon replie sur z=20.
+
+        Output:
+        zenith: float
+            Distance zénithale effectivement utilisée.
+        """
+        if not parent.is_dir() or (parent / f"z={zenith:g}").is_dir():
+            return zenith  # rien à vérifier, ou dossier présent
+        fallback = Z_FALLBACK
+        if zenith != fallback and (parent / f"z={fallback:g}").is_dir():
+            self.log_warning_once(
+                f"z={zenith:g} not found in {parent}; using z={fallback:g} instead."
+            )
+            return fallback
+        self.log_warning_once(f"z={zenith:g} not found in {parent}.")
+        return zenith

@@ -411,7 +411,7 @@ def get_output_directory(output_main_directory, simulation, planet_on):
         simulation['ncpa'],
         simulation['seeing'],
     ]
-    for key in ('z', 'filter', 'distance'):
+    for key in ('z', 'filter'):
         if simulation[key] is not None:
             parts.append(simulation[key])
     return os.path.join(*parts)

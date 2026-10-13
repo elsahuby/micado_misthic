@@ -112,6 +112,9 @@ def resampling(
 
                 output_directory = os.path.join(
                     output_directory_filter, f"Samp{sf}")
+                if simulation['distance'] is not None:
+                    output_directory = os.path.join(
+                        output_directory, simulation['distance'])
                 output_path = os.path.join(
                     output_directory, filename + '.fits')
                 if output_directory not in prepared_directories:
