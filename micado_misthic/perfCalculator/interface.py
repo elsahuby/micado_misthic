@@ -77,12 +77,19 @@ def filter_folder(text):
     except IndexError:
         return text
 
+def distance_folder(text):
+    """'50 mas' -> 'p_dist_mas=50'"""
+    parts = text.split()
+    return f"p_dist_mas={parts[0]}" if parts else text
+
 class ParamAvailability:
     """Grise dans chaque combo les valeurs incompatibles avec les autres choix."""
-    def __init__(self, combinations, widgets, converters=None):
+    def __init__(self, combinations, widgets, converters=None, targets=None, manage_enabled =True):
         self.combinations = combinations
         self.widgets = widgets
         self.converters = converters or [None] * len(widgets)
+        self.targets = range(len(widgets)) if targets is None else targets
+        self.manage_enabled = manage_enabled
         for w in widgets:
             w.currentTextChanged.connect(self.update)
         self.update()
@@ -98,12 +105,14 @@ class ParamAvailability:
     def update(self):
         n = len(self.widgets)
         has_data = bool(self.combinations)
-        for w in self.widgets:
-            w.setEnabled(has_data)           # all grey until a valid folder is scanned
-        if not has_data:
-            return
+        if self.manage_enabled:
+            for w in self.widgets:
+                w.setEnabled(has_data)           # all grey until a valid folder is scanned
+            if not has_data:
+                return
         current = [w.currentText() for w in self.widgets]
-        for i, w in enumerate(self.widgets):
+        for i in self.targets:
+            w = self.widgets[i]
             allowed = {
                 c[i] for c in self.combinations
                 if all(
@@ -114,6 +123,12 @@ class ParamAvailability:
             model = w.model()
             for k in range(w.count()):
                 model.item(k).setEnabled(self._value(i, w.itemText(k)) in allowed)
+    def is_valid(self):
+        """True si la sélection courante existe dans l'arborescence scannée."""
+        current = tuple(
+            self._value(i, w.currentText()) for i, w in enumerate(self.widgets)
+        )
+        return current in self.combinations
 
 class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMethods, PlottingMethods, QWidget):
     """Qt interface for selecting, processing and displaying ADI simulations."""
@@ -254,11 +269,9 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
 
         # Distance to the star in mas.
         self.Distance_combo = QComboBox()
+        self.Distance_combo.setEditable(True)
         self.Distance_combo.addItems([
-            "15 mas", "30 mas", "50 mas", "75 mas", "100 mas", "125 mas",
-            "150 mas", "200 mas", "250 mas", "300 mas", "500 mas", "700 mas",
-            "1000 mas", "1400 mas",
-        ])
+            "15 mas", "30 mas", "40 mas", "50 mas", "60 mas"])
 
         # Delta magnitude between the star and the planet.
         self.delta_mag_combo = QLineEdit()
@@ -309,7 +322,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         planet_layout = QGridLayout(planet_tab)
         planet_layout.setHorizontalSpacing(12)
         planet_layout.setVerticalSpacing(8)
-        self.distance_label = QLabel("Distance:")
+        self.distance_label = QLabel("Distance (precalculated):")
         self.delta_mag_label = QLabel("DeltaMagnitude:")
         planet_layout.addWidget(self.distance_label, 0, 0)
         planet_layout.addWidget(self.Distance_combo, 0, 1)
@@ -534,6 +547,24 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             ],
         )
 
+        self.planet_availability = ParamAvailability(
+            set(),
+            [self.clc_combo, self.ncpa_combo, self.seeing_combo,
+             self.filter_wavelength_combo, self.sampling_combo,
+             self.Distance_combo, self.obs_time_combo],
+            converters=[
+                None,
+                {"No": "NoNCPA", "Yes": "NCPA"}.get,
+                None,
+                filter_folder,
+                lambda t: f"Samp{t}",
+                distance_folder,
+                None,
+            ],
+            targets=[5],              # on ne grise que la distance
+            manage_enabled=False,     # update_planet_controls gère déjà l'état enabled
+        )
+
     def get_user_function_map(self):
         """
         Collect public functions exposed by ``user_func``.
@@ -557,6 +588,14 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             combos = set()
             self.files_box.append(f"Tree scan impossible: {e}")
         self.availability.set_combinations(combos)
+        
+        planet_root = self.base_folder / "With_Planet"
+        try:
+            planet_combos = scan_combinations(str(planet_root), depth=8, skip=(3,))
+        except OSError as e:
+            planet_combos = set()
+            self.files_box.append(f"Planet tree scan impossible: {e}")
+        self.planet_availability.set_combinations(planet_combos)
 
     def parse_function_arguments(self, argument_text):
 
@@ -741,6 +780,19 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             return
         self.save_root = Path(folder)
         self.save_folder_label.setText(str(self.save_root))
+
+    def check_planet_directories(self, verbose=True):
+        if not self.planet_on_checkbox.isChecked():
+            return True
+        if not self.planet_availability.combinations:
+            if verbose:
+                self.files_box.append("Planet: no valid With_Planet tree found in the base folder.")
+            return False
+        if not self.planet_availability.is_valid():
+            if verbose:
+                self.files_box.append("Planet: this parameter combination does not exist in With_Planet.")
+            return False
+        return True
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
