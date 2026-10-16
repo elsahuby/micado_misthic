@@ -27,7 +27,7 @@ class ParameterPathMethods:
         planet_folder: str
             ``With_Planet`` or ``No_Planet``.
         """
-        return "With_Planet" if self.planet_on_checkbox.isChecked() else "No_Planet"
+        return "With_Planet" if self.planet_on_checkbox.isChecked() or self.planet_on_large_checkbox.isChecked() else "No_Planet"
 
     def get_with_planet_path(self, params=None):
         """Build the planet simulation path from one set of parameters.
@@ -159,7 +159,7 @@ class ParameterPathMethods:
             airmass=1 / np.cos(np.radians(zenith_distance)), pixel_scale=params["sampling"],
         )
 
-    def get_planet_micado_flux(self, delta_t=None, zenith_distance=None, wavelength=None, path=None, params=None):
+    def get_planet_micado_flux(self, delta_t=None, zenith_distance=None, wavelength=None, path=None, params=None, delta_mag=None):
         """Compute MICADO flux for the selected planet.
 
         Input:
@@ -201,7 +201,7 @@ class ParameterPathMethods:
         if delta_t is None or zenith_distance is None:
             raise ValueError("delta_t and zenith_distance are required to compute planet flux.")
 
-        delta_mag, star_mag = params["delta_magnitude"], params["magnitude"]
+        star_mag = params["magnitude"]
         if delta_mag is None or star_mag is None:
             raise ValueError("Star magnitude and delta magnitude are required for planet flux.")
         _, star_flux = self.get_star_spectrum(star_mag=star_mag, wavelength=wavelength, params=params)
@@ -268,7 +268,18 @@ class ParameterPathMethods:
         filt, wavelength = self.filter_wavelength_combo.currentData() or ("H", "1.582 µm")
         params = {
             "planet": self.get_planet_folder(),
-            "planet_distance": float(self.Distance_combo.currentText().replace(" mas", "")),
+            "planet_distance": float(0 if self.planet_on_checkbox.isChecked() is False 
+                                     else self.distance_combo.currentText().replace(" mas", "")),
+            "planet_name": [0 if self.planet_on_large_checkbox.isChecked() is False 
+                                     else v.strip() for v in self.planetname_combo.text().split(",")],
+            "long_planet_distance": [0 if self.planet_on_large_checkbox.isChecked() is False 
+                                     else float(v.strip()) for v in self.longdistance_combo.text().split(",")],
+            "long_planet_deltamag": [0 if self.planet_on_large_checkbox.isChecked() is False 
+                                     else float(v.strip()) for v in self.longdelta_mag_combo.text().split(",")],
+            "long_planet_pa": [0 if self.planet_on_large_checkbox.isChecked() is False 
+                                     else float(v.strip()) for v in self.longangle_combo.text().split(",")],
+            "long_planet_name": [0 if self.planet_on_large_checkbox.isChecked() is False 
+                                     else v.strip() for v in self.longname_combo.text().split(",")],
             "clc": self.clc_combo.currentText(),
             "ncpa": "NCPA" if self.ncpa_combo.currentText() == "Yes" else "NoNCPA",
             "seeing": self.seeing_combo.currentText(),

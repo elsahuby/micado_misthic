@@ -57,7 +57,7 @@ class ProcessingMethods:
         self.last_contrast_curve_path = None
         self.last_adi_source_dir = Path(path)
         self.last_reconstructed_adi_sum = None
-        self.last_planet_contrast = None
+        self.last_planet_contrast = []
         return params, Path(output_dir) if output_dir is not None else None, time.time()
 
     def resolve_output_directory(self, output_dir, save_root, params):
@@ -120,7 +120,7 @@ class ProcessingMethods:
         )
         if output_dir is not None:
             self.save_planet_adi_result(planet_adi_sum, output_dir)
-        self.last_planet_contrast = float(get_planet_contrast(planet_adi_sum))
+        self.last_planet_contrast.append(float(get_planet_contrast(planet_adi_sum)))
         self.files_box.append(message)
         return planet_adi_sum
 
@@ -287,11 +287,18 @@ class ProcessingMethods:
         params = params if params is not None else self.get_parameter_values()
         planet_path = self.build_input_path("No_Planet", params)
         # Case of planet distant enough so that coronagraph have small impact on it
-        if params["planet_distance"] > 70:
+        print(params["planet_distance"],params["long_planet_distance"],np.sum(params["long_planet_distance"]) )
+        if params["planet_distance"] == 0 and np.sum(params["long_planet_distance"]) == 0:
+            print("!!!!!!!!!!!!!!!   NO planet.    !!!!!!!!!!!!!!!!!")
+            return None
+
+        if np.sum(params["long_planet_distance"]) != 0:
+            frame_exp_time = np.float32(delta_t)
             planet_path = self.build_input_path("With_Planet", params)
             path_no = self.build_input_path("No_Planet", params)
             input_files = self.get_preprocessed_adi_files(path_no)
             adi_file = input_files["adi_sum"]
+            perf_psf_data = fits.getheader(adi_file)["S_PERPSF"]
             self.files_box.append("Calculating Planet signal from off-axis PSF images.")
             parangle_file = Path(list(self.last_adi_source_dir.glob("*angle_tab.txt"))[0])
             angles_para = np.atleast_1d(np.loadtxt(parangle_file, skiprows=1))
@@ -299,30 +306,45 @@ class ProcessingMethods:
             dim_s = np.shape(planet_small_cube)[1]
             dim = fits.getheader(adi_file)["NAXIS1"]
             n_frames = len(angles_para)
-            dist_planet_in_pix = params["planet_distance"]/params["sampling"]
-            planet_cube = np.zeros((n_frames,dim,dim))
-            from micado_misthic.imgproc.imgproc import do_shift, rotate_frame
-            for i in np.arange(n_frames):
-                xy = (dist_planet_in_pix*np.cos(-angles_para[i]*np.pi/180.+np.pi/2.),dist_planet_in_pix*np.sin(-angles_para[i]*np.pi/180.+np.pi/2.))
-                xy_int = np.int32(xy)
-                planet_cube[i,dim//2-dim_s//2+xy_int[0]:dim//2+dim_s//2+xy_int[0],dim//2-dim_s//2+xy_int[1]:dim//2+dim_s//2+xy_int[1]] += do_shift(planet_small_cube[i],(xy-xy_int))
-            mean_planet = np.mean(planet_cube,axis=0)
-            planet_cube_dummy = planet_cube.copy()
-            for i in np.arange(n_frames):
-                planet_cube_dummy[i] = rotate_frame(planet_cube[i]-mean_planet, angles_para[i])
-            planet_cube_adi = np.sum(planet_cube_dummy, axis=0)
-            # Mean of derotated images
-            mean_planet_adi = np.sum(planet_cube, axis=0)
-            mean_file = {
-                        "n_frames": n_frames,
-                        "mean_abs_cube": mean_planet_adi,
-                        }
-        else:
+            d_mas_multi = params["long_planet_distance"]
+            delta_mag_multi = params["long_planet_deltamag"]
+            pa_multi = params["long_planet_pa"]
+            all_planet_adi = np.zeros((dim,dim))
+            if not (len(d_mas_multi) == len(delta_mag_multi) == len(pa_multi)):
+                raise ValueError("d_mas, delta_mag and pa must have the same number of values")
+            for d_mas, d_mag, d_pa in zip(d_mas_multi,delta_mag_multi,pa_multi):
+                print("pass:",d_mas,d_mas/params["sampling"])
+                d_planet = d_mas/params["sampling"]
+                planet_cube = np.zeros((n_frames,dim,dim))
+                from micado_misthic.imgproc.imgproc import do_shift, rotate_frame
+                for i in np.arange(n_frames):
+                    xy = (d_planet*np.cos(-(angles_para[i]+90-d_pa)*np.pi/180.+np.pi/2.),d_planet*np.sin(-(angles_para[i]+90-d_pa)*np.pi/180.+np.pi/2.))
+                    xy_int = np.int32(xy)
+                    planet_cube[i,dim//2-dim_s//2+xy_int[0]:dim//2+dim_s//2+xy_int[0],dim//2-dim_s//2+xy_int[1]:dim//2+dim_s//2+xy_int[1]] += do_shift(planet_small_cube[i],(xy-xy_int))
+                mean_planet = np.mean(planet_cube,axis=0)
+                planet_cube_dummy = planet_cube.copy()
+                for i in np.arange(n_frames):
+                    planet_cube_dummy[i] = rotate_frame(planet_cube[i]-mean_planet, angles_para[i])
+                planet_cube_adi = np.sum(planet_cube_dummy, axis=0)
+                # Mean of derotated images
+                mean_planet_adi = np.sum(planet_cube, axis=0)
+                mean_file = {"n_frames": n_frames,
+                         "mean_abs_cube": mean_planet_adi,}
+                delta_mag = params["delta_magnitude"]
+                planet_photon_flux, _, _ = self.get_planet_micado_flux(
+                    path=planet_path, delta_t=delta_t, zenith_distance=zenith_distance, params=params,delta_mag = d_mag)
+                # sigron=0 because the noise has already been applied to the stellar ADI, and the planet is added to that image. The read noise is already present in the stellar ADI.
+                planet_adi_sum = add_noise_after_adi(planet_cube_adi, perf_psf_data, mean_file, photon_flux=planet_photon_flux,
+                    sig_ron=0., emission_flux=0., frame_exp_time=frame_exp_time, silent=True,)
+                planet_adi_sum = self.finish_planet_processing(planet_adi_sum, output_dir)
+                all_planet_adi += planet_adi_sum
+
+                
+        if params["planet_distance"] != 0:
             planet_path = self.get_with_planet_path(params)
             if planet_path is None:
                 self.files_box.append("Warning: With_Planet path is not available. Skipping planet ADI.")
                 return None
-
             try:
                 input_files = self.get_preprocessed_adi_files(
                     planet_path, require_noise_inputs=apply_photon_noise,
@@ -337,54 +359,22 @@ class ProcessingMethods:
             self.files_box.append(f"Loading preprocessed planet ADI: {adi_file.name}")
             QApplication.processEvents()
 
-        if apply_photon_noise:
-            if delta_t is None or zenith_distance is None:
-                raise ValueError("delta_t and zenith_distance are required for planet photon noise.")
-
-            self.files_box.append(
-                "Adding photon and emission noise to the preprocessed planet ADI..."
-            )
-            perf_psf_data = fits.getheader(adi_file)["S_PERPSF"]
-            frame_exp_time = np.float32(delta_t)
-            planet_photon_flux, planet_emission_per_pix, _ = self.get_planet_micado_flux(
-                path=planet_path,
-                delta_t=delta_t,
-                zenith_distance=zenith_distance,
-                params=params,
-            )
-
+            self.files_box.append("Adding photon and emission noise to the preprocessed planet ADI...")
+  
+            delta_mag = params["delta_magnitude"]
+            planet_photon_flux, _, _ = self.get_planet_micado_flux(
+                path=planet_path, delta_t=delta_t, zenith_distance=zenith_distance, params=params,delta_mag = delta_mag)
             # sigron=0 because the noise has already been applied to the stellar ADI, and the planet is added to that image. The read noise is already present in the stellar ADI.
-            planet_adi_sum = add_noise_after_adi(
-                planet_cube_adi,
-                perf_psf_data,
-                mean_file,
-                photon_flux=planet_photon_flux,
-                sig_ron=0.,
-                emission_flux=0.,
-                frame_exp_time=frame_exp_time,
-                silent=True,
-            )  #################Maybe a problem of exp_time here. Muste be hte same than for the star... to be checked.
-        else:
-            planet_adi_sum = planet_cube_adi
+            planet_adi_sum = add_noise_after_adi(planet_cube_adi, perf_psf_data, mean_file, photon_flux=planet_photon_flux,
+                sig_ron=0., emission_flux=0., frame_exp_time=frame_exp_time, silent=True,)
+            planet_adi_sum = self.finish_planet_processing(planet_adi_sum, output_dir)
+            all_planet_adi += planet_adi_sum
 
         wavelength, pixel_scale = params["wavelength"], params["sampling"]
-        if not apply_photon_noise:
-            delta_mag_text = params["delta_magnitude"]
-            if delta_mag_text is None:
-                raise ValueError("No delta magnitude selected.")
-            delta_mag = float(delta_mag_text)
-            if not np.isfinite(delta_mag):
-                raise ValueError("Delta magnitude must be finite.")
-            planet_flux_ratio = 10.0 ** (-0.4 * delta_mag)
-            planet_adi_sum = np.asarray(planet_adi_sum, dtype=np.float64) * planet_flux_ratio
-            self.files_box.append(
-                f"Noiseless planet scaled by delta magnitude {delta_mag:g}: "
-                f"flux ratio = {planet_flux_ratio:.6e}."
-            )
-        planet_adi_sum, _ = self.convolve_adi_and_psf(
-            planet_adi_sum, None, wavelength, pixel_scale
+        all_planet_adi, _ = self.convolve_adi_and_psf(
+            all_planet_adi, None, wavelength, pixel_scale
         )
-        return self.finish_planet_processing(planet_adi_sum, output_dir)
+        return all_planet_adi
 
     def perform_adi_with_noisy_cubes(
             self, path, save_root=None, apply_noise=False, output_dir=None, params=None):

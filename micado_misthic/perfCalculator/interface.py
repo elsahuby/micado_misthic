@@ -151,7 +151,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         self.last_adi_sum = None
         self.last_psf_sum = None
         self.last_reconstructed_adi_sum = None
-        self.last_planet_contrast = None
+        self.last_planet_contrast = []
         self.last_no_planet_output_dir = None
         self.last_contrast_curve_path = None
         self.last_adi_source_dir = None
@@ -266,11 +266,12 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         ### Planet parameters
         self.planet_on_checkbox = QCheckBox("Planet on")
         self.planet_on_checkbox.setChecked(False)
+        self.planet_on_large_checkbox = QCheckBox("Planet on (>70mas)")
+        self.planet_on_large_checkbox.setChecked(False)
 
         # Distance to the star in mas.
-        self.Distance_combo = QComboBox()
-        self.Distance_combo.setEditable(True)
-        self.Distance_combo.addItems([
+        self.distance_combo = QComboBox()
+        self.distance_combo.addItems([
             "15 mas", "30 mas", "40 mas", "50 mas", "60 mas"])
 
         # Delta magnitude between the star and the planet.
@@ -281,7 +282,23 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         delta_mag_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
         delta_mag_validator.setLocale(QLocale(QLocale.Language.C))
         self.delta_mag_combo.setValidator(delta_mag_validator)
+        self.planetname_combo = QLineEdit()
+        self.planetname_combo.setPlaceholderText("")
+        self.planetname_combo.setText("0")
+
         ###
+        self.longdistance_combo = QLineEdit()
+        self.longdistance_combo.setPlaceholderText("70.00 - 1400.00")
+        self.longdistance_combo.setText("0")
+        self.longdelta_mag_combo = QLineEdit()
+        self.longdelta_mag_combo.setPlaceholderText("0.00 - 20.00")
+        self.longdelta_mag_combo.setText("0")
+        self.longangle_combo = QLineEdit()
+        self.longangle_combo.setPlaceholderText("0.00 - 360.00")
+        self.longangle_combo.setText("0")
+        self.longname_combo = QLineEdit()
+        self.longname_combo.setPlaceholderText("")
+        self.longname_combo.setText("0")
 
         ### Input parameter tabs
         self.input_tabs = QTabWidget()
@@ -317,23 +334,50 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         star_layout.addWidget(QLabel("Flux folder:"), 3, 0)
         star_layout.addWidget(self.flux_folder_label, 3, 1)
 
+        # Separation line
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
+
         # Planet tab.
         planet_tab = QWidget()
         planet_layout = QGridLayout(planet_tab)
         planet_layout.setHorizontalSpacing(12)
-        planet_layout.setVerticalSpacing(8)
-        self.distance_label = QLabel("Distance (precalculated):")
-        self.delta_mag_label = QLabel("DeltaMagnitude:")
+        planet_layout.setVerticalSpacing(12)
+        self.distance_label = QLabel("Distance (precalc <70 mas):")
+        self.delta_mag_label = QLabel("DeltaMagnitude(precalc):")
+        self.planetname_label = QLabel("Planet name (<70 mas-PA=90):")
         planet_layout.addWidget(self.distance_label, 0, 0)
-        planet_layout.addWidget(self.Distance_combo, 0, 1)
+        planet_layout.addWidget(self.distance_combo, 0, 1)
         planet_layout.addWidget(self.delta_mag_label, 1, 0)
         planet_layout.addWidget(self.delta_mag_combo, 1, 1)
-        
+        planet_layout.addWidget(self.planetname_label, 2, 0)
+        planet_layout.addWidget(self.planetname_combo, 2, 1)
+        planet_layout.addWidget(self.planet_on_checkbox, 3, 0)
 
-        planet_layout.addWidget(self.planet_on_checkbox)
+        planetlong_tab = QWidget()
+        planetlong_layout = QGridLayout(planetlong_tab)
+        planetlong_layout.setHorizontalSpacing(12)
+        planetlong_layout.setVerticalSpacing(12)
+        self.longdistance_label = QLabel("Distance -comma separated:")
+        self.longdelta_mag_label = QLabel("DeltaMagnitude -comma separated:")
+        self.longangle_label = QLabel("Position Angle -comma separated:")
+        self.longname_label = QLabel("Planet name -comma separated:")
+        planetlong_layout.addWidget(self.longdistance_label, 0, 0)
+        planetlong_layout.addWidget(self.longdistance_combo, 0, 1)
+        planetlong_layout.addWidget(self.longdelta_mag_label, 1, 0)
+        planetlong_layout.addWidget(self.longdelta_mag_combo, 1, 1)
+        planetlong_layout.addWidget(self.longangle_label, 2, 0)
+        planetlong_layout.addWidget(self.longangle_combo, 2, 1)
+        planetlong_layout.addWidget(self.longname_label, 3, 0)
+        planetlong_layout.addWidget(self.longname_combo, 3, 1)
+        planetlong_layout.addWidget(self.planet_on_large_checkbox, 4, 0)
+
         self.input_tabs.addTab(instrument_tab, "Instrument")
         self.input_tabs.addTab(star_tab, "Star")
-        self.input_tabs.addTab(planet_tab, "Planet")
+        self.input_tabs.addTab(planet_tab, "Planet @ <70 mas")
+        self.input_tabs.addTab(planetlong_tab, "Planets @ >70mas")
+
 
         left_layout.addWidget(self.input_tabs)
         ###
@@ -352,10 +396,6 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         """)
         left_layout.addWidget(self.path_box)
 
-        # Separation line
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setFrameShadow(QFrame.Shadow.Sunken)
         left_layout.addWidget(line)
 
         ### Post-processing controls
@@ -517,9 +557,11 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         self.filter_wavelength_combo.currentTextChanged.connect(self.update_paths)
         self.sampling_combo.currentTextChanged.connect(self.update_filter_wavelength_options)
         self.declination_combo.editingFinished.connect(self.update_paths_zenith)
-        self.Distance_combo.currentTextChanged.connect(self.update_paths)
+        self.distance_combo.currentTextChanged.connect(self.update_paths)
         self.planet_on_checkbox.stateChanged.connect(self.update_paths)
         self.planet_on_checkbox.stateChanged.connect(self.update_planet_controls)
+        self.planet_on_large_checkbox.stateChanged.connect(self.update_paths)
+        self.planet_on_large_checkbox.stateChanged.connect(self.update_planet_controls)
 
         self.update_planet_controls()
         self.update_filter_wavelength_options()
@@ -551,7 +593,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             set(),
             [self.clc_combo, self.ncpa_combo, self.seeing_combo,
              self.filter_wavelength_combo, self.sampling_combo,
-             self.Distance_combo, self.obs_time_combo],
+             self.distance_combo, self.obs_time_combo],
             converters=[
                 None,
                 {"No": "NoNCPA", "Yes": "NCPA"}.get,
@@ -693,10 +735,21 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         None
         """
         planet_on = self.planet_on_checkbox.isChecked()
-        self.Distance_combo.setEnabled(planet_on)
+        self.distance_combo.setEnabled(planet_on)
         self.delta_mag_combo.setEnabled(planet_on)
+        self.planetname_combo.setEnabled(planet_on)
         self.distance_label.setEnabled(planet_on)
         self.delta_mag_label.setEnabled(planet_on)
+        self.planetname_label.setEnabled(planet_on)
+        planet_on_large = self.planet_on_large_checkbox.isChecked()
+        self.longdistance_label.setEnabled(planet_on_large)
+        self.longangle_label.setEnabled(planet_on_large)
+        self.longdelta_mag_label.setEnabled(planet_on_large)
+        self.longname_label.setEnabled(planet_on_large)
+        self.longdistance_combo.setEnabled(planet_on_large)
+        self.longangle_combo.setEnabled(planet_on_large)
+        self.longdelta_mag_combo.setEnabled(planet_on_large)
+        self.longname_combo.setEnabled(planet_on_large)
 
     def on_adi_changed(self, text):
         """Update ADI-dependent controls after the ADI selection changes.
