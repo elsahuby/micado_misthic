@@ -258,7 +258,7 @@ def run_before_after_adi_test(
 
     print("\n### AVANT : bruit sur le cube puis ADI")
     start_avant = time.time()
-    cube_noise_avant, _, _ = scale_to_photons(
+    cube_noise_avant, _ = scale_to_photons(
         cube_data,
         perf_psf_data,
         photon_flux,
@@ -268,7 +268,7 @@ def run_before_after_adi_test(
         no_noise=False,
         silent=False,
     )
-    psf_cube_noise_avant, _, _ = scale_to_photons(
+    psf_cube_noise_avant, _ = scale_to_photons(
         psf_cube_data,
         perf_psf_data,
         photon_flux,

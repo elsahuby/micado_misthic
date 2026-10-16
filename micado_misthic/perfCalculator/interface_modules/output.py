@@ -8,9 +8,7 @@ from pathlib import Path
 import numpy as np
 from configobj import ConfigObj
 
-from micado_misthic.perfCalculator.utils import (
-    save_contrast_curve as save_contrast_curve_fits,
-)
+from micado_misthic.perfCalculator.utils import save_contrast_curve 
 
 
 class OutputMethods:
@@ -284,13 +282,8 @@ class OutputMethods:
         self.files_box.append(f"With_Planet ADI result saved:\n- {adi_sum_path}")
         return adi_sum_path
 
-    def save_contrast_curve(
-            self,
-            x,
-            contrast,
-            output_dir,
-            planet_distance_mas=None,
-            planet_contrast=None):
+    def save_contrast_curveGUI(self, x, contrast, output_dir, 
+                    planet_distance_mas=None, planet_contrast=None, planet_pa=None, planet_name=None):
         """Save the contrast curve as FITS data and a PNG plot.
 
         Input:
@@ -311,10 +304,9 @@ class OutputMethods:
 
         fits_path = output_dir / f"{params_slug}_contrast_curve.fits"
 
-        save_contrast_curve_fits(
+        save_contrast_curve(
             fits_path, x, contrast,
-            planet_distance_mas=planet_distance_mas, planet_contrast=planet_contrast,
-        )
+            planet_distance_mas=planet_distance_mas, planet_contrast=planet_contrast, planet_pa=planet_pa, planet_name=planet_name)
         png_path = fits_path.with_suffix(".png")
         self.contrast_figure.savefig(png_path, dpi=200, bbox_inches="tight")
 

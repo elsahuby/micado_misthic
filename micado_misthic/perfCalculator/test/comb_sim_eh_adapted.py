@@ -396,11 +396,11 @@ for i in range(len(lbd)):
                 # perf_psf_sum_pl = np.sum(perf_psf_pl)
                 
                 ### NEW ###
-                planet_cube_noisy, perf_psf_noisy, flux_per_frame = scale_to_photons(planet_cube, perf_psf_pl, 
+                planet_cube_noisy, flux_per_frame = scale_to_photons(planet_cube, perf_psf_pl, 
                                                                                     planet_photon_flux, planet_emission_per_pix, 
                                                                                     frame_exp_time=frame_exp_time, sig_ron = ron, 
                                                                                     no_noise=False)
-                plpsf_cube_noisy, perf_psf_noisy, flux_per_frame = scale_to_photons(cube_psf_pl, perf_psf_pl, 
+                plpsf_cube_noisy, flux_per_frame = scale_to_photons(cube_psf_pl, perf_psf_pl, 
                                                                                     planet_photon_flux, planet_emission_per_pix, 
                                                                                     frame_exp_time=frame_exp_time, sig_ron = ron, 
                                                                                     no_noise=False)

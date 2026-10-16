@@ -2,6 +2,7 @@
 Author: Tristan Deseine
 """
 
+import os
 import sys
 import ast
 import inspect
@@ -42,6 +43,92 @@ from micado_misthic.perfCalculator.interface_modules.output import OutputMethods
 from micado_misthic.perfCalculator.interface_modules.processing import ProcessingMethods
 from micado_misthic.perfCalculator.interface_modules.plotting import PlottingMethods
 
+def scan_combinations(root, depth, skip=()):
+    """Retourne l'ensemble des combinaisons valides.
+
+    depth : nombre total de niveaux dans l'arborescence (niveaux ignorés inclus)
+    skip  : indices (à partir de 0) des niveaux à ignorer
+    """
+    combos = set()
+
+    def rec(path, level, parts):
+        if level == depth:
+            combos.add(parts)
+            return
+        last = level == depth - 1
+        for name in os.listdir(path):
+            if name.startswith("."):          # .DS_Store, etc.
+                continue
+            full = os.path.join(path, name)
+            if os.path.isdir(full) or last:
+                if level in skip:
+                    rec(full, level + 1, parts)
+                else:
+                    value = os.path.splitext(name)[0] if (last and os.path.isfile(full)) else name
+                    rec(full, level + 1, parts + (value,))
+
+    rec(root, 0, ())
+    return combos
+
+def filter_folder(text):
+    """'H - 1.582 µm' -> 'filter1.582'"""
+    try:
+        return "filter" + text.split(" - ")[1].split()[0]
+    except IndexError:
+        return text
+
+def distance_folder(text):
+    """'50 mas' -> 'p_dist_mas=50'"""
+    parts = text.split()
+    return f"p_dist_mas={parts[0]}" if parts else text
+
+class ParamAvailability:
+    """Grise dans chaque combo les valeurs incompatibles avec les autres choix."""
+    def __init__(self, combinations, widgets, converters=None, targets=None, manage_enabled =True):
+        self.combinations = combinations
+        self.widgets = widgets
+        self.converters = converters or [None] * len(widgets)
+        self.targets = range(len(widgets)) if targets is None else targets
+        self.manage_enabled = manage_enabled
+        for w in widgets:
+            w.currentTextChanged.connect(self.update)
+        self.update()
+
+    def _value(self, i, text):
+        conv = self.converters[i]
+        return conv(text) if conv else text
+    
+    def set_combinations(self, combinations):
+        self.combinations = combinations
+        self.update()
+
+    def update(self):
+        n = len(self.widgets)
+        has_data = bool(self.combinations)
+        if self.manage_enabled:
+            for w in self.widgets:
+                w.setEnabled(has_data)           # all grey until a valid folder is scanned
+            if not has_data:
+                return
+        current = [w.currentText() for w in self.widgets]
+        for i in self.targets:
+            w = self.widgets[i]
+            allowed = {
+                c[i] for c in self.combinations
+                if all(
+                    c[j] == self._value(j, current[j])
+                    for j in range(n) if j != i and current[j]
+                )
+            }
+            model = w.model()
+            for k in range(w.count()):
+                model.item(k).setEnabled(self._value(i, w.itemText(k)) in allowed)
+    def is_valid(self):
+        """True si la sélection courante existe dans l'arborescence scannée."""
+        current = tuple(
+            self._value(i, w.currentText()) for i, w in enumerate(self.widgets)
+        )
+        return current in self.combinations
 
 class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMethods, PlottingMethods, QWidget):
     """Qt interface for selecting, processing and displaying ADI simulations."""
@@ -64,7 +151,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         self.last_adi_sum = None
         self.last_psf_sum = None
         self.last_reconstructed_adi_sum = None
-        self.last_planet_contrast = None
+        self.last_planet_contrast = []
         self.last_no_planet_output_dir = None
         self.last_contrast_curve_path = None
         self.last_adi_source_dir = None
@@ -118,16 +205,12 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         ###
 
         ### Instrument parameters
-        self.clc_legacy_folder_map = {
-            "CLC15": "CLC0",
-            "CLC25": "CLC1",
-            "CLC50": "CLC2",
-        }
         self.clc_combo = QComboBox()
         self.clc_combo.addItems(["CLC15", "CLC25", "CLC50"])
+        self.clc_combo.setCurrentText("CLC25")
 
         self.ncpa_combo = QComboBox()
-        self.ncpa_combo.addItems(["Yes", "No"])
+        self.ncpa_combo.addItems(["No","Yes"])
 
         self.sampling_combo = QComboBox()
         self.sampling_combo.addItems(["1.5", "4.0"])
@@ -139,28 +222,32 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             "K": ["2.100 µm", "2.150 µm", "2.235 µm"],
         }
         self.filter_wavelength_combo = QComboBox()
+        #self.filter_wavelength_combo.setCurrentText("H:" "1.582 µm")
 
         # Detection noise.
         self.noise_checkbox = QComboBox()
-        self.noise_checkbox.addItems(["No", "Yes"])
+        self.noise_checkbox.addItems(["Yes","No"])
 
         # Observation time.
         self.obs_time_combo = QComboBox()
-        self.obs_time_combo.addItem("Not specified", None)
+        #self.obs_time_combo.addItem("Not specified", None)
         self.obs_time_combo.addItems(["15min", "30min", "1h", "1h30","2h"])
+        self.obs_time_combo.setCurrentText("1h")
         ###
 
         ### Star parameters
         self.seeing_combo = QComboBox()
         self.seeing_combo.addItems(["Q1", "MED", "Q4"])
+        self.seeing_combo.setCurrentText("MED")
 
         # Star magnitude input (real number between 0 and 15)
         self.magnitude_combo = QLineEdit()
-        self.magnitude_combo.setPlaceholderText("0.00 - 15.00")
+        self.magnitude_combo.setPlaceholderText("0.00 - 20.00")
         magnitude_validator = QDoubleValidator(0.0, 15.0, 3, self.magnitude_combo)
         magnitude_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
         magnitude_validator.setLocale(QLocale(QLocale.Language.C))
         self.magnitude_combo.setValidator(magnitude_validator)
+        self.magnitude_combo.setText("0")
 
         self.declination_combo = QLineEdit()
         self.declination_combo.setPlaceholderText("-90° - 90°")
@@ -168,6 +255,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         declination_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
         declination_validator.setLocale(QLocale(QLocale.Language.C))
         self.declination_combo.setValidator(declination_validator)
+        self.declination_combo.setText("0.0")
 
 
         # Flux folder label (auto-detected from the base folder).
@@ -178,23 +266,39 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         ### Planet parameters
         self.planet_on_checkbox = QCheckBox("Planet on")
         self.planet_on_checkbox.setChecked(False)
+        self.planet_on_large_checkbox = QCheckBox("Planet on (>70mas)")
+        self.planet_on_large_checkbox.setChecked(False)
 
         # Distance to the star in mas.
-        self.Distance_combo = QComboBox()
-        self.Distance_combo.addItems([
-            "15 mas", "30 mas", "50 mas", "75 mas", "100 mas", "125 mas",
-            "150 mas", "200 mas", "250 mas", "300 mas", "500 mas", "700 mas",
-            "1000 mas", "1400 mas",
-        ])
+        self.distance_combo = QComboBox()
+        self.distance_combo.addItems([
+            "15 mas", "30 mas", "40 mas", "50 mas", "60 mas"])
 
         # Delta magnitude between the star and the planet.
         self.delta_mag_combo = QLineEdit()
         self.delta_mag_combo.setPlaceholderText("0.00 - 20.00")
-        delta_mag_validator = QDoubleValidator(0.0, 20.0, 3, self.delta_mag_combo)
+        self.delta_mag_combo.setText("0")
+        delta_mag_validator = QDoubleValidator(0.0, 20.1, 3, self.delta_mag_combo)
         delta_mag_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
         delta_mag_validator.setLocale(QLocale(QLocale.Language.C))
         self.delta_mag_combo.setValidator(delta_mag_validator)
+        self.planetname_combo = QLineEdit()
+        self.planetname_combo.setPlaceholderText("")
+        self.planetname_combo.setText("0")
+
         ###
+        self.longdistance_combo = QLineEdit()
+        self.longdistance_combo.setPlaceholderText("70.00 - 1400.00")
+        self.longdistance_combo.setText("0")
+        self.longdelta_mag_combo = QLineEdit()
+        self.longdelta_mag_combo.setPlaceholderText("0.00 - 20.00")
+        self.longdelta_mag_combo.setText("0")
+        self.longangle_combo = QLineEdit()
+        self.longangle_combo.setPlaceholderText("0.00 - 360.00")
+        self.longangle_combo.setText("0")
+        self.longname_combo = QLineEdit()
+        self.longname_combo.setPlaceholderText("")
+        self.longname_combo.setText("0")
 
         ### Input parameter tabs
         self.input_tabs = QTabWidget()
@@ -204,51 +308,76 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         instrument_layout = QGridLayout(instrument_tab)
         instrument_layout.setHorizontalSpacing(12)
         instrument_layout.setVerticalSpacing(8)
-        instrument_layout.addWidget(QLabel("Coronograph:"), 0, 0)
-        instrument_layout.addWidget(self.clc_combo, 0, 1)
-        instrument_layout.addWidget(QLabel("NCPA:"), 1, 0)
-        instrument_layout.addWidget(self.ncpa_combo, 1, 1)
-        instrument_layout.addWidget(QLabel("Sampling:"), 2, 0)
-        instrument_layout.addWidget(self.sampling_combo, 2, 1)
-        instrument_layout.addWidget(QLabel("Filter / Wavelength:"), 3, 0)
-        instrument_layout.addWidget(self.filter_wavelength_combo, 3, 1)
-        instrument_layout.addWidget(QLabel("Detection noise:"), 4, 0)
-        instrument_layout.addWidget(self.noise_checkbox, 4, 1)
+        instrument_layout.addWidget(QLabel("Seeing:"), 0, 0)
+        instrument_layout.addWidget(self.seeing_combo, 0, 1)
+        instrument_layout.addWidget(QLabel("Coronograph:"), 1, 0)
+        instrument_layout.addWidget(self.clc_combo, 1, 1)
+        instrument_layout.addWidget(QLabel("NCPA:"), 2, 0)
+        instrument_layout.addWidget(self.ncpa_combo, 2, 1)
+        instrument_layout.addWidget(QLabel("Sampling:"), 3, 0)
+        instrument_layout.addWidget(self.sampling_combo, 3, 1)
+        instrument_layout.addWidget(QLabel("Filter / Wavelength:"), 4, 0)
+        instrument_layout.addWidget(self.filter_wavelength_combo, 4, 1)
         instrument_layout.addWidget(QLabel("Observation time:"), 5, 0)
         instrument_layout.addWidget(self.obs_time_combo, 5, 1)
+
 
         # Star tab.
         star_tab = QWidget()
         star_layout = QGridLayout(star_tab)
         star_layout.setHorizontalSpacing(12)
         star_layout.setVerticalSpacing(8)
-        star_layout.addWidget(QLabel("Seeing:"), 0, 0)
-        star_layout.addWidget(self.seeing_combo, 0, 1)
         star_layout.addWidget(QLabel("Magnitude:"), 1, 0)
         star_layout.addWidget(self.magnitude_combo, 1, 1)
         star_layout.addWidget(QLabel("Declination:"), 2, 0)
         star_layout.addWidget(self.declination_combo, 2, 1)
-
         star_layout.addWidget(QLabel("Flux folder:"), 3, 0)
         star_layout.addWidget(self.flux_folder_label, 3, 1)
+
+        # Separation line
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
 
         # Planet tab.
         planet_tab = QWidget()
         planet_layout = QGridLayout(planet_tab)
         planet_layout.setHorizontalSpacing(12)
-        planet_layout.setVerticalSpacing(8)
-        self.distance_label = QLabel("Distance:")
-        self.delta_mag_label = QLabel("DeltaMagnitude:")
+        planet_layout.setVerticalSpacing(12)
+        self.distance_label = QLabel("Distance (precalc <70 mas):")
+        self.delta_mag_label = QLabel("DeltaMagnitude(precalc):")
+        self.planetname_label = QLabel("Planet name (<70 mas-PA=90):")
         planet_layout.addWidget(self.distance_label, 0, 0)
-        planet_layout.addWidget(self.Distance_combo, 0, 1)
+        planet_layout.addWidget(self.distance_combo, 0, 1)
         planet_layout.addWidget(self.delta_mag_label, 1, 0)
         planet_layout.addWidget(self.delta_mag_combo, 1, 1)
-        
+        planet_layout.addWidget(self.planetname_label, 2, 0)
+        planet_layout.addWidget(self.planetname_combo, 2, 1)
+        planet_layout.addWidget(self.planet_on_checkbox, 3, 0)
 
-        planet_layout.addWidget(self.planet_on_checkbox)
+        planetlong_tab = QWidget()
+        planetlong_layout = QGridLayout(planetlong_tab)
+        planetlong_layout.setHorizontalSpacing(12)
+        planetlong_layout.setVerticalSpacing(12)
+        self.longdistance_label = QLabel("Distance -comma separated:")
+        self.longdelta_mag_label = QLabel("DeltaMagnitude -comma separated:")
+        self.longangle_label = QLabel("Position Angle -comma separated:")
+        self.longname_label = QLabel("Planet name -comma separated:")
+        planetlong_layout.addWidget(self.longdistance_label, 0, 0)
+        planetlong_layout.addWidget(self.longdistance_combo, 0, 1)
+        planetlong_layout.addWidget(self.longdelta_mag_label, 1, 0)
+        planetlong_layout.addWidget(self.longdelta_mag_combo, 1, 1)
+        planetlong_layout.addWidget(self.longangle_label, 2, 0)
+        planetlong_layout.addWidget(self.longangle_combo, 2, 1)
+        planetlong_layout.addWidget(self.longname_label, 3, 0)
+        planetlong_layout.addWidget(self.longname_combo, 3, 1)
+        planetlong_layout.addWidget(self.planet_on_large_checkbox, 4, 0)
+
         self.input_tabs.addTab(instrument_tab, "Instrument")
         self.input_tabs.addTab(star_tab, "Star")
-        self.input_tabs.addTab(planet_tab, "Planet")
+        self.input_tabs.addTab(planet_tab, "Planet @ <70 mas")
+        self.input_tabs.addTab(planetlong_tab, "Planets @ >70mas")
+
 
         left_layout.addWidget(self.input_tabs)
         ###
@@ -267,10 +396,6 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         """)
         left_layout.addWidget(self.path_box)
 
-        # Separation line
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setFrameShadow(QFrame.Shadow.Sunken)
         left_layout.addWidget(line)
 
         ### Post-processing controls
@@ -283,7 +408,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         left_layout.addWidget(post_title)
 
         self.adi_checkbox = QComboBox()
-        self.adi_checkbox.addItems(["No", "Yes"])
+        self.adi_checkbox.addItems(["Yes", "No"])
         self.adi_checkbox.currentTextChanged.connect(self.on_adi_changed)
         self.adi_enabled = False
 
@@ -431,14 +556,56 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         self.obs_time_combo.currentTextChanged.connect(self.update_paths)
         self.filter_wavelength_combo.currentTextChanged.connect(self.update_paths)
         self.sampling_combo.currentTextChanged.connect(self.update_filter_wavelength_options)
-        self.declination_combo.textChanged.connect(self.update_paths)
-        self.Distance_combo.currentTextChanged.connect(self.update_paths)
+        self.declination_combo.editingFinished.connect(self.update_paths_zenith)
+        self.distance_combo.currentTextChanged.connect(self.update_paths)
         self.planet_on_checkbox.stateChanged.connect(self.update_paths)
         self.planet_on_checkbox.stateChanged.connect(self.update_planet_controls)
+        self.planet_on_large_checkbox.stateChanged.connect(self.update_paths)
+        self.planet_on_large_checkbox.stateChanged.connect(self.update_planet_controls)
 
         self.update_planet_controls()
         self.update_filter_wavelength_options()
         self.update_save_controls()
+
+
+        '''try:
+            combos = scan_combinations(self.base_folder, depth=7,skip=(3,))
+        except OSError as e:
+            combos = set()
+            print("Scan impossible :", e)
+
+        if combos:'''
+        self.availability = ParamAvailability(
+            set(),
+            [self.clc_combo, self.ncpa_combo, self.seeing_combo,
+            self.filter_wavelength_combo, self.sampling_combo, self.obs_time_combo],
+            converters=[
+                None,
+                {"No": "NoNCPA", "Yes": "NCPA"}.get,
+                None,
+                filter_folder,
+                lambda t: f"Samp{t}",
+                None,
+            ],
+        )
+
+        self.planet_availability = ParamAvailability(
+            set(),
+            [self.clc_combo, self.ncpa_combo, self.seeing_combo,
+             self.filter_wavelength_combo, self.sampling_combo,
+             self.distance_combo, self.obs_time_combo],
+            converters=[
+                None,
+                {"No": "NoNCPA", "Yes": "NCPA"}.get,
+                None,
+                filter_folder,
+                lambda t: f"Samp{t}",
+                distance_folder,
+                None,
+            ],
+            targets=[5],              # on ne grise que la distance
+            manage_enabled=False,     # update_planet_controls gère déjà l'état enabled
+        )
 
     def get_user_function_map(self):
         """
@@ -453,6 +620,24 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             for name, func in inspect.getmembers(user_functions, inspect.isfunction)
             if func.__module__ == user_functions.__name__ and not name.startswith("_")
         }
+
+    def refresh_availability(self):
+        """Rescan the simulation tree and grey out impossible parameter values."""
+        root = self.base_folder / "No_Planet"      # adjust, see note below
+        try:
+            combos = scan_combinations(str(root), depth=7, skip=(3,))
+        except OSError as e:
+            combos = set()
+            self.files_box.append(f"Tree scan impossible: {e}")
+        self.availability.set_combinations(combos)
+        
+        planet_root = self.base_folder / "With_Planet"
+        try:
+            planet_combos = scan_combinations(str(planet_root), depth=8, skip=(3,))
+        except OSError as e:
+            planet_combos = set()
+            self.files_box.append(f"Planet tree scan impossible: {e}")
+        self.planet_availability.set_combinations(planet_combos)
 
     def parse_function_arguments(self, argument_text):
 
@@ -505,6 +690,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             self.folder_label.setText(f"Base folder: {folder}")
             self.auto_detect_flux_folder()
             self.update_paths()
+            self.refresh_availability()
 
     def open_help(self):
         """Open or select the closable Markdown user-guide tab.
@@ -549,10 +735,21 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         None
         """
         planet_on = self.planet_on_checkbox.isChecked()
-        self.Distance_combo.setEnabled(planet_on)
+        self.distance_combo.setEnabled(planet_on)
         self.delta_mag_combo.setEnabled(planet_on)
+        self.planetname_combo.setEnabled(planet_on)
         self.distance_label.setEnabled(planet_on)
         self.delta_mag_label.setEnabled(planet_on)
+        self.planetname_label.setEnabled(planet_on)
+        planet_on_large = self.planet_on_large_checkbox.isChecked()
+        self.longdistance_label.setEnabled(planet_on_large)
+        self.longangle_label.setEnabled(planet_on_large)
+        self.longdelta_mag_label.setEnabled(planet_on_large)
+        self.longname_label.setEnabled(planet_on_large)
+        self.longdistance_combo.setEnabled(planet_on_large)
+        self.longangle_combo.setEnabled(planet_on_large)
+        self.longdelta_mag_combo.setEnabled(planet_on_large)
+        self.longname_combo.setEnabled(planet_on_large)
 
     def on_adi_changed(self, text):
         """Update ADI-dependent controls after the ADI selection changes.
@@ -636,6 +833,19 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             return
         self.save_root = Path(folder)
         self.save_folder_label.setText(str(self.save_root))
+
+    def check_planet_directories(self, verbose=True):
+        if not self.planet_on_checkbox.isChecked():
+            return True
+        if not self.planet_availability.combinations:
+            if verbose:
+                self.files_box.append("Planet: no valid With_Planet tree found in the base folder.")
+            return False
+        if not self.planet_availability.is_valid():
+            if verbose:
+                self.files_box.append("Planet: this parameter combination does not exist in With_Planet.")
+            return False
+        return True
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

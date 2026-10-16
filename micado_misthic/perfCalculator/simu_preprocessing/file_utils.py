@@ -1,5 +1,5 @@
 """
-Author: Tristan Deseine
+Author: Tristan Deseine, P. Baudoz
 """
 
 import os
@@ -109,7 +109,7 @@ def select_observation_time(desired_time, cube, angles, delta_t):
     start = max(0, min(start, cube.shape[0] - Number_of_img)) 
     stop = start + Number_of_img
 
-    return cube[start:stop], angles[start:stop]
+    return cube[start:stop], angles[start:stop], start
 
 def format_observation_time(duration_seconds):
     """
@@ -411,7 +411,7 @@ def get_output_directory(output_main_directory, simulation, planet_on):
         simulation['ncpa'],
         simulation['seeing'],
     ]
-    for key in ('z', 'filter', 'distance'):
+    for key in ('z', 'filter'):
         if simulation[key] is not None:
             parts.append(simulation[key])
     return os.path.join(*parts)
