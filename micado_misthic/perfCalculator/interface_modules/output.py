@@ -164,13 +164,13 @@ class OutputMethods:
         config_files = list(path.glob("*.ini"))
 
         if not config_files:
-            self.files_box.append(
+            self.log_warning_once(
                 "Warning: Config file (*.ini) not found in path."
             )
             return None
 
         if len(config_files) > 1:
-            self.files_box.append(
+            self.log_warning_once(
                 f"Warning: Multiple config files (*.ini) found in {path}."
             )
             return None
@@ -181,7 +181,7 @@ class OutputMethods:
             config = ConfigObj(str(config_file))
 
             if section_name not in config:
-                self.files_box.append(
+                self.log_warning_once(
                     f"Warning: section [{section_name}] not found in {config_file.name}."
                 )
                 return None
@@ -193,7 +193,7 @@ class OutputMethods:
                 value = section.get(keys)
 
                 if value is None:
-                    self.files_box.append(
+                    self.log_warning_once(
                         f"Warning: {keys} not found in [{section_name}]."
                     )
                     return None
@@ -211,7 +211,7 @@ class OutputMethods:
                 value = section.get(key)
 
                 if value is None:
-                    self.files_box.append(
+                    self.log_warning_once(
                         f"Warning: {key} not found in [{section_name}]."
                     )
                 else:
@@ -225,7 +225,7 @@ class OutputMethods:
             return values
 
         except Exception as e:
-            self.files_box.append(
+            self.log_warning_once(
                 f"Error reading config file {config_file.name}: {str(e)}"
             )
             return None
@@ -283,7 +283,7 @@ class OutputMethods:
         return adi_sum_path
 
     def save_contrast_curveGUI(self, x, contrast, output_dir, 
-                    planet_distance_mas=None, planet_contrast=None, planet_pa=None, planet_name=None):
+                    planet_distance_mas=None, planet_contrast=None, planet_pa=None, planet_name=None, planet_delta_mag = None):
         """Save the contrast curve as FITS data and a PNG plot.
 
         Input:
@@ -306,7 +306,7 @@ class OutputMethods:
 
         save_contrast_curve(
             fits_path, x, contrast,
-            planet_distance_mas=planet_distance_mas, planet_contrast=planet_contrast, planet_pa=planet_pa, planet_name=planet_name)
+            planet_distance_mas=planet_distance_mas, planet_contrast=planet_contrast, planet_pa=planet_pa, planet_name=planet_name, planet_delta_mag=planet_delta_mag)
         png_path = fits_path.with_suffix(".png")
         self.contrast_figure.savefig(png_path, dpi=200, bbox_inches="tight")
 

@@ -302,6 +302,12 @@ class ParameterPathMethods:
                 raise ValueError(f"Invalid {key}: {text}")
             params[key] = float(text) if text else None
 
+        if params["declination"] is not None:
+            input_path = params["base_folder"] / "No_Planet" / self.resolve_clc_folder(params["base_folder"] / "No_Planet", params["clc"]) / params["ncpa"] / params["seeing"]
+            zenith = self.compute_nearest_zenithal_distance(params["declination"])
+            zenith = self.check_zenith_folder(input_path, zenith)
+            params["z_dist"] = f"{zenith:g}"
+
         if validate:
             if params["noise"] and params["magnitude"] is None:
                 raise ValueError("A star magnitude is required for noise calculation.")

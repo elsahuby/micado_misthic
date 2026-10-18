@@ -472,8 +472,8 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         # ADI image and contrast curve tabs.
         self.tab_widget = QTabWidget()
 
-        image_tab = QWidget()
-        image_layout = QVBoxLayout(image_tab)
+        self.image_tab = QWidget()
+        image_layout = QVBoxLayout(self.image_tab)
         image_layout.setSpacing(8)
         image_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -491,10 +491,10 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         image_layout.addWidget(self.adi_canvas)
         self.adi_toolbar = NavigationToolbar(self.adi_canvas, self)
         image_layout.addWidget(self.adi_toolbar)
-        self.tab_widget.addTab(image_tab, "ADI Image")
+        self.tab_widget.addTab(self.image_tab, "ADI Image")
 
-        contrast_tab = QWidget()
-        contrast_layout = QVBoxLayout(contrast_tab)
+        self.contrast_tab = QWidget()
+        contrast_layout = QVBoxLayout(self.contrast_tab)
         contrast_layout.setSpacing(8)
         contrast_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -503,7 +503,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         contrast_layout.addWidget(self.contrast_canvas)
         self.contrast_toolbar = NavigationToolbar(self.contrast_canvas, self)
         contrast_layout.addWidget(self.contrast_toolbar)
-        self.tab_widget.addTab(contrast_tab, "Contrast Curve")
+        self.tab_widget.addTab(self.contrast_tab, "Contrast Curve")
 
         right_layout.addWidget(self.tab_widget)
 
@@ -628,7 +628,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             combos = scan_combinations(str(root), depth=7, skip=(3,))
         except OSError as e:
             combos = set()
-            self.files_box.append(f"Tree scan impossible: {e}")
+            self.log_warning_once(f"Tree scan impossible: {e}")
         self.availability.set_combinations(combos)
         
         planet_root = self.base_folder / "With_Planet"
@@ -636,7 +636,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             planet_combos = scan_combinations(str(planet_root), depth=8, skip=(3,))
         except OSError as e:
             planet_combos = set()
-            self.files_box.append(f"Planet tree scan impossible: {e}")
+            self.log_warning_once(f"Planet tree scan impossible: {e}")
         self.planet_availability.set_combinations(planet_combos)
 
     def parse_function_arguments(self, argument_text):
@@ -796,19 +796,17 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         selected_function = self.user_function_map.get(function_name)
 
         if selected_function is None:
-            self.files_box.append(f"Unknown function: {function_name}")
+            self.log_warning_once(f"Unknown function: {function_name}")
             return
 
         try:
             arguments = self.parse_function_arguments(argument)
             if function_name == "get_contrast_from_contrast_curve_file":
                 if self.last_contrast_curve_path is None:
-                    self.files_box.append(
-                        "No contrast curve FITS available. Generate and save the contrast curve first."
-                    )
+                    self.log_warning_once("No contrast curve FITS available. Generate and save the contrast curve first.")
                     return
                 if len(arguments) != 1:
-                    self.files_box.append("Please enter only the distance in mas.")
+                    self.log_warning_once("Please enter only the distance in mas.")
                     return
                 arguments = [self.last_contrast_curve_path, arguments[0]]
             result = selected_function(*arguments)
@@ -816,11 +814,11 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             if function_name == "get_contrast_from_contrast_curve_file":
                 plot_function_name = "Contrast"
                 if result is None:
-                    self.files_box.append(f"Distance {argument} mas is outside the saved contrast curve range.")
+                    self.log_warning_once(f"Distance {argument} mas is outside the saved contrast curve range.")
                 else:
                     self.files_box.append(f"{plot_function_name}({argument}) = {result}")
         except Exception as e:
-            self.files_box.append(f"Function failed ({function_name}): {e}")
+            self.log_warning_once(f"Function failed ({function_name}): {e}")
 
     def choose_save_root_folder(self):
         """Select the root directory for saved processing results.
@@ -839,11 +837,11 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             return True
         if not self.planet_availability.combinations:
             if verbose:
-                self.files_box.append("Planet: no valid With_Planet tree found in the base folder.")
+                self.log_warning_once("Planet: no valid With_Planet tree found in the base folder.")
             return False
         if not self.planet_availability.is_valid():
             if verbose:
-                self.files_box.append("Planet: this parameter combination does not exist in With_Planet.")
+                self.log_warning_once("Planet: this parameter combination does not exist in With_Planet.")
             return False
         return True
 

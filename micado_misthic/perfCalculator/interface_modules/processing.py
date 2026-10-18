@@ -587,14 +587,14 @@ class ProcessingMethods:
         if apply_noise:
             key_values = self.read_config_values_from_path(path, "simuconfig", ["delta_t", "zenith_distance"])
             if key_values is None:
-                self.files_box.append("Warning: Could not read config file. Skipping noise application.")
+                self.log_warning_once("Warning: Could not read config file. Skipping noise application.")
                 key_values = {}
 
             delta_t = key_values.get("delta_t")
             zenith_distance = key_values.get("zenith_distance")
 
             if delta_t is None or zenith_distance is None:
-                self.files_box.append("Warning: Could not find delta_t or zenith_distance in config file. Skipping noise application.")
+                self.log_warning_once("Warning: Could not find delta_t or zenith_distance in config file. Skipping noise application.")
             else:
                 try:
                     zenith_distance = np.float32(zenith_distance)
@@ -616,7 +616,7 @@ class ProcessingMethods:
                         f"preprocessed ADI (delta_t={delta_t}s)."
                     )
                 except Exception as e:
-                    self.files_box.append(f"Warning: Could not prepare ADI noise: {str(e)}")
+                    self.log_warning_once(f"Warning: Could not prepare ADI noise: {str(e)}")
                     # A failed noise setup falls back to the clean ADI result.
 
         params["noise"] = noise_applied
@@ -643,8 +643,7 @@ class ProcessingMethods:
 
         wavelength, pixel_scale = params["wavelength"], params["sampling"]
         adi_sum, psf_sum = self.convolve_adi_and_psf(
-            adi_sum, psf_sum, wavelength, pixel_scale
-        )
+            adi_sum, psf_sum, wavelength, pixel_scale)
         adi_sum = self.normalize_adi_by_psf(adi_sum, psf_sum, "star")
         ellapsed_adi = time.time() - start_time_adi
         print(f"ADI processing completed in {ellapsed_adi:.2f} s.")
@@ -693,17 +692,18 @@ class ProcessingMethods:
         if self.result_params is not None:
             self.result_params.setdefault("normalization", {})[label] = None
         if psf_sum is None:
-            self.files_box.append(f"Warning: {psf_label} PSF is missing. {label} ADI image was not normalized.")
+            self.log_warning_once(f"Warning: {psf_label} PSF is missing. {label} ADI image was not normalized.")
             return adi_sum
 
         max_psf = np.nanmax(psf_sum)
         if max_psf == 0:
-            self.files_box.append(f"Warning: {psf_label} PSF max is zero. {label} ADI image was not normalized.")
+            self.log_warning_once(f"Warning: {psf_label} PSF max is zero. {label} ADI image was not normalized.")
             return adi_sum
 
         self.files_box.append(f"Normalized {label} ADI by {psf_label} PSF max: {max_psf:.6e}")
         if self.result_params is not None:
             self.result_params["normalization"][label] = max_psf
+        print(self.result_params)
         return normalize_by_psf_max(adi_sum, psf_sum)
 
     def reconstruct_adi_image(self, star_adi_path, planet_adi_path, output_dir=None):
@@ -767,12 +767,12 @@ class ProcessingMethods:
             raise ValueError("ADI and PSF must be 2D images with the same shape.")
 
         l_over_d_pix = wavelength * 1e-6 / tel_diameter * 180. / np.pi * 3600 * 1e3 / pixel_scale
-        mask_radius = 0.5 * l_over_d_pix
+        print('size convolution', l_over_d_pix)
+        mask_radius = 1.0 * l_over_d_pix
         mask = get_circle_mask(adi_sum.shape, mask_radius)
         self.files_box.append(f"Convolving ADI and PSF: aperture radius = {mask_radius:.3f} pixels.")
         return convolve_adi_image(adi_sum, mask), (
-            convolve_adi_image(psf_sum, mask) if psf_sum is not None else None
-        )
+            convolve_adi_image(psf_sum, mask) if psf_sum is not None else None )
 
     def run_processing(self):
         """Validate current inputs and process the preprocessed ADI products.

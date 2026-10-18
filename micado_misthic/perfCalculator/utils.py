@@ -57,21 +57,29 @@ def find_simulation_fits(path):
 
 
 def save_contrast_curve(output_path, separation_mas, contrast,
-                        planet_distance_mas=None, planet_contrast=None, planet_pa=None, planet_name=None):
-    """Write a 5-sigma contrast FITS table with optional planet metadata."""
-    columns = [
-        fits.Column(name="separation_mas", array=np.asarray(separation_mas, dtype=np.float64), format="D"),
-        fits.Column(name="contrast_5sigma", array=np.asarray(contrast, dtype=np.float64), format="D"),
-    ]
-    table = fits.BinTableHDU.from_columns(columns)
+                        planet_distance_mas=None, planet_contrast=None, planet_pa=None, planet_name=None, planet_delta_mag =None):
+    """Write a 5-sigma contrast FITS table"""
+    data = np.vstack([
+        np.asarray(separation_mas, dtype=np.float32),
+        np.asarray(contrast, dtype=np.float32),
+    ])  
+    hdu = fits.PrimaryHDU(data)          # 2D array as the primary HDU
+    hdu.header["ROW0"] = ("separation_mas", "Content of row 0")
+    hdu.header["ROW1"] = ("contrast_5sigma", "Content of row 1")
+
+    #    fits.Column(name="separation_mas", array=np.asarray(separation_mas, dtype=np.float64), format="D"),
+    #    fits.Column(name="contrast_5sigma", array=np.asarray(contrast, dtype=np.float64), format="D"),
+    #]
+    #table = fits.BinTableHDU.from_columns(columns)
     if planet_distance_mas is not None and planet_contrast is not None:
         n_planet=len(planet_distance_mas)
         for i in np.arange(n_planet):
-            table.header[f"PLDIST{i:02}"] = (float(planet_distance_mas[i]), "Planet distance in mas")
-            table.header[f"PLCONT{i:02}"] = (float(planet_contrast[i]), "Planet contrast")
-            table.header[f"PLPA{i:02}"] = (float(planet_pa[i]), "Planet Position Angle")
-            table.header[f"PLNAME{i:02}"] = (str(planet_name[i]), "Planet name")
-    table.writeto(output_path, overwrite=True)
+            hdu.header[f"PLDIST{i:02}"] = (float(planet_distance_mas[i]), "Planet distance in mas")
+            hdu.header[f"PLDMAG{i:02}"] = (float(planet_delta_mag[i]), "Planet  Delta Magnitude")
+            hdu.header[f"PLCONT{i:02}"] = (float(planet_contrast[i]), "Planet contrast with coronagraph")
+            hdu.header[f"PLPA{i:02}"] = (float(planet_pa[i]), "Planet Position Angle")
+            hdu.header[f"PLNAME{i:02}"] = (str(planet_name[i]), "Planet name")
+    hdu.writeto(output_path, overwrite=True)
 
 
 def normalize_by_psf_max(img, psf):
