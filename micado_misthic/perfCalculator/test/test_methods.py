@@ -27,7 +27,7 @@ from micado_misthic.perfCalculator.utils import (
     add_noise_after_adi,
     convolve_adi_image,
     find_simulation_fits,
-    save_contrast_curve,
+    save_contrast_curveGUI,
     normalize_by_psf_max,
     psf_sum_in_photons,
     run_adi_without_noise,
@@ -325,12 +325,12 @@ def run_before_after_adi_test(
 
     avant_contrast_output = output_dir / f"avant_contrast_curve{frame_suffix}.fits"
     apres_contrast_output = output_dir / f"apres_contrast_curve{frame_suffix}.fits"
-    save_contrast_curve(
+    save_contrast_curveGUI(
         avant_contrast_output,
         avant_separation,
         avant_contrast,
     )
-    save_contrast_curve(
+    save_contrast_curveGUI(
         apres_contrast_output,
         apres_separation,
         apres_contrast,
@@ -462,7 +462,7 @@ def run_before_after_adi_test(
 
 if __name__ == "__main__":
     # User parameters: update these values before running the comparison.
-    test_dir = r"D:\resampled_data\No_Planet\CLC1\NoNCPA\Q1\filter1.190\Samp1.5"
+    test_dir = r"D:\resampled_data\CoroStar\CLC1\NoNCPA\Q1\filter1.190\Samp1.5"
 
     # Use None to load the parallactic-angle table from test_dir automatically.
     parangle_file = r"C:\Users\tdeseine\Desktop\MISTHIC\output\adi_before_after_test\paralactic_angle\z=40\Parangle_tab.txt"

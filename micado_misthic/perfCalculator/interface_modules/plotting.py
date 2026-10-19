@@ -1,5 +1,5 @@
 """
-Author: Tristan Deseine
+Author: Tristan Deseine, Pierre Baudoz
 """
 
 import time
@@ -126,7 +126,7 @@ class PlottingMethods:
         planet_delta_mag = None
         planet_legend_name = None
         print('Planet****',self.last_planet_contrast)
-        if params["planet"] == "With_Planet" and self.last_planet_contrast is not None:
+        if params["planet"] == "Planet" and self.last_planet_contrast is not None:
             planet_distance_mas = []
             planet_contrast = []
             planet_pa =[]
@@ -146,15 +146,15 @@ class PlottingMethods:
                 legend_name = f"{name} @ {dist:.1f} mas & PA =90° - effective contrast = {contrast:.4e} - \u0394Mag = {d_mag:.2f}"
                 planet_legend_name.append(legend_name)
                 self.files_box.append(legend_name)
-                long_last_contrast= np.float32(self.last_planet_contrast)[:-1]
+                far_last_contrast= np.float32(self.last_planet_contrast)[:-1]
             else:
-                long_last_contrast= np.float32(self.last_planet_contrast)
-            if np.sum(params["long_planet_distance"]) != 0:
-                d_mas_multi = params["long_planet_distance"]
-                pa_multi = params["long_planet_pa"]
-                name_multi = params["long_planet_name"]
-                dmag_multi = params["long_planet_deltamag"]
-                for dist, contrast, d_pa, name, d_mag in zip(d_mas_multi, long_last_contrast, pa_multi, name_multi, dmag_multi):
+                far_last_contrast= np.float32(self.last_planet_contrast)
+            if np.sum(params["far_planet_distance"]) != 0:
+                d_mas_multi = params["far_planet_distance"]
+                pa_multi = params["far_planet_pa"]
+                name_multi = params["far_planet_name"]
+                dmag_multi = params["far_planet_deltamag"]
+                for dist, contrast, d_pa, name, d_mag in zip(d_mas_multi, far_last_contrast, pa_multi, name_multi, dmag_multi):
                     planet_distance_mas.append(dist)
                     planet_contrast.append(contrast)
                     planet_pa.append(d_pa)
@@ -171,8 +171,8 @@ class PlottingMethods:
                     planet_distance_mas=planet_distance_mas, planet_contrast=planet_contrast, planet_legend_name = planet_legend_name, legend_conditions=legend_conditions)
         self.last_contrast_curve_path = None
         contrast_output_dir = (
-            self.last_no_planet_output_dir.parent
-            if self.last_no_planet_output_dir is not None
+            self.last_corostar_output_dir.parent
+            if self.last_corostar_output_dir is not None
             else self.last_adi_source_dir
         )
         if contrast_output_dir is not None:

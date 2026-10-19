@@ -1,5 +1,5 @@
 """
-Author: Tristan Deseine
+Author: Tristan Deseine, Pierre Baudoz
 """
 
 import os
@@ -152,10 +152,10 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         self.last_psf_sum = None
         self.last_reconstructed_adi_sum = None
         self.last_planet_contrast = []
-        self.last_no_planet_output_dir = None
+        self.last_corostar_output_dir = None
         self.last_contrast_curve_path = None
         self.last_adi_source_dir = None
-        self.no_planet_path = None
+        self.corostar_path = None
         self.help_browser = None
 
         self.init_ui()
@@ -287,18 +287,18 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         self.planetname_combo.setText("0")
 
         ###
-        self.longdistance_combo = QLineEdit()
-        self.longdistance_combo.setPlaceholderText("70.00 - 1400.00")
-        self.longdistance_combo.setText("0")
-        self.longdelta_mag_combo = QLineEdit()
-        self.longdelta_mag_combo.setPlaceholderText("0.00 - 20.00")
-        self.longdelta_mag_combo.setText("0")
-        self.longangle_combo = QLineEdit()
-        self.longangle_combo.setPlaceholderText("0.00 - 360.00")
-        self.longangle_combo.setText("0")
-        self.longname_combo = QLineEdit()
-        self.longname_combo.setPlaceholderText("")
-        self.longname_combo.setText("0")
+        self.fardistance_combo = QLineEdit()
+        self.fardistance_combo.setPlaceholderText("70.00 - 1400.00")
+        self.fardistance_combo.setText("0")
+        self.fardelta_mag_combo = QLineEdit()
+        self.fardelta_mag_combo.setPlaceholderText("0.00 - 20.00")
+        self.fardelta_mag_combo.setText("0")
+        self.farangle_combo = QLineEdit()
+        self.farangle_combo.setPlaceholderText("0.00 - 360.00")
+        self.farangle_combo.setText("0")
+        self.farname_combo = QLineEdit()
+        self.farname_combo.setPlaceholderText("")
+        self.farname_combo.setText("0")
 
         ### Input parameter tabs
         self.input_tabs = QTabWidget()
@@ -355,28 +355,28 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         planet_layout.addWidget(self.planetname_combo, 2, 1)
         planet_layout.addWidget(self.planet_on_checkbox, 3, 0)
 
-        planetlong_tab = QWidget()
-        planetlong_layout = QGridLayout(planetlong_tab)
-        planetlong_layout.setHorizontalSpacing(12)
-        planetlong_layout.setVerticalSpacing(12)
-        self.longdistance_label = QLabel("Distance -comma separated:")
-        self.longdelta_mag_label = QLabel("DeltaMagnitude -comma separated:")
-        self.longangle_label = QLabel("Position Angle -comma separated:")
-        self.longname_label = QLabel("Planet name -comma separated:")
-        planetlong_layout.addWidget(self.longdistance_label, 0, 0)
-        planetlong_layout.addWidget(self.longdistance_combo, 0, 1)
-        planetlong_layout.addWidget(self.longdelta_mag_label, 1, 0)
-        planetlong_layout.addWidget(self.longdelta_mag_combo, 1, 1)
-        planetlong_layout.addWidget(self.longangle_label, 2, 0)
-        planetlong_layout.addWidget(self.longangle_combo, 2, 1)
-        planetlong_layout.addWidget(self.longname_label, 3, 0)
-        planetlong_layout.addWidget(self.longname_combo, 3, 1)
-        planetlong_layout.addWidget(self.planet_on_large_checkbox, 4, 0)
+        planetfar_tab = QWidget()
+        planetfar_layout = QGridLayout(planetfar_tab)
+        planetfar_layout.setHorizontalSpacing(12)
+        planetfar_layout.setVerticalSpacing(12)
+        self.fardistance_label = QLabel("Distance -comma separated:")
+        self.fardelta_mag_label = QLabel("DeltaMagnitude -comma separated:")
+        self.farangle_label = QLabel("Position Angle -comma separated:")
+        self.farname_label = QLabel("Planet name -comma separated:")
+        planetfar_layout.addWidget(self.fardistance_label, 0, 0)
+        planetfar_layout.addWidget(self.fardistance_combo, 0, 1)
+        planetfar_layout.addWidget(self.fardelta_mag_label, 1, 0)
+        planetfar_layout.addWidget(self.fardelta_mag_combo, 1, 1)
+        planetfar_layout.addWidget(self.farangle_label, 2, 0)
+        planetfar_layout.addWidget(self.farangle_combo, 2, 1)
+        planetfar_layout.addWidget(self.farname_label, 3, 0)
+        planetfar_layout.addWidget(self.farname_combo, 3, 1)
+        planetfar_layout.addWidget(self.planet_on_large_checkbox, 4, 0)
 
         self.input_tabs.addTab(instrument_tab, "Instrument")
         self.input_tabs.addTab(star_tab, "Star")
         self.input_tabs.addTab(planet_tab, "Planet @ <70 mas")
-        self.input_tabs.addTab(planetlong_tab, "Planets @ >70mas")
+        self.input_tabs.addTab(planetfar_tab, "Planets @ >70mas")
 
 
         left_layout.addWidget(self.input_tabs)
@@ -407,11 +407,6 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         post_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         left_layout.addWidget(post_title)
 
-        self.adi_checkbox = QComboBox()
-        self.adi_checkbox.addItems(["Yes", "No"])
-        self.adi_checkbox.currentTextChanged.connect(self.on_adi_changed)
-        self.adi_enabled = False
-
         self.save_adi_checkbox = QComboBox()
         self.save_adi_checkbox.addItems(["No", "Yes"])
         self.save_adi_checkbox.setCurrentText("Yes")
@@ -420,7 +415,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
 
         self.save_folder_button = QPushButton("Choose save folder")
         self.save_folder_button.clicked.connect(self.choose_save_root_folder)
-        self.save_folder_button.setEnabled(False)
+        #self.save_folder_button.setEnabled(False)
 
         self.save_folder_label = QLabel("No save folder selected")
         self.save_folder_label.setStyleSheet("color: #555;")
@@ -428,11 +423,12 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         self.plot_contrast_button = QPushButton("Plot contrast curve")
         self.plot_contrast_button.setFixedHeight(30)
         self.plot_contrast_button.clicked.connect(self.plot_contrast_curve)
-        self.plot_contrast_button.setStyleSheet("background-color: #4caf50; color: white; border-radius: 4px;")
+        self.plot_contrast_button.setStyleSheet("""
+            QPushButton {font-size: 15px; font-weight: bold; background-color: #4caf50; color: white; border-radius: 6px; }
+            QPushButton:hover {background-color: #218838; }
+        """)#"background-color: #4caf50; color: white; border-radius: 4px;")
 
         post_layout = QGridLayout()
-        post_layout.addWidget(QLabel("ADI:"), 0, 0)
-        post_layout.addWidget(self.adi_checkbox, 0, 1)
         post_layout.addWidget(QLabel("Save ADI:"), 1, 0)
         post_layout.addWidget(self.save_adi_checkbox, 1, 1)
         post_layout.addWidget(QLabel("Save folder:"), 2, 0)
@@ -445,16 +441,8 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         run_button = QPushButton("Run")
         run_button.setFixedHeight(35)
         run_button.setStyleSheet("""
-            QPushButton {
-                font-size: 15px;
-                font-weight: bold;
-                background-color: #2d89ef;
-                color: white;
-                border-radius: 6px;
-            }
-            QPushButton:hover {
-                background-color: #1b5fa7;
-            }
+            QPushButton { font-size: 15px; font-weight: bold; background-color: #2d89ef; color: white; border-radius: 6px; }
+            QPushButton:hover { background-color: #1b5fa7; }
         """)
         run_button.clicked.connect(self.run_processing)
         left_layout.addWidget(run_button)
@@ -623,7 +611,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
 
     def refresh_availability(self):
         """Rescan the simulation tree and grey out impossible parameter values."""
-        root = self.base_folder / "No_Planet"      # adjust, see note below
+        root = self.base_folder / "CoroStar"      # adjust, see note below
         try:
             combos = scan_combinations(str(root), depth=7, skip=(3,))
         except OSError as e:
@@ -631,7 +619,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             self.log_warning_once(f"Tree scan impossible: {e}")
         self.availability.set_combinations(combos)
         
-        planet_root = self.base_folder / "With_Planet"
+        planet_root = self.base_folder / "Planet"
         try:
             planet_combos = scan_combinations(str(planet_root), depth=8, skip=(3,))
         except OSError as e:
@@ -742,35 +730,14 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         self.delta_mag_label.setEnabled(planet_on)
         self.planetname_label.setEnabled(planet_on)
         planet_on_large = self.planet_on_large_checkbox.isChecked()
-        self.longdistance_label.setEnabled(planet_on_large)
-        self.longangle_label.setEnabled(planet_on_large)
-        self.longdelta_mag_label.setEnabled(planet_on_large)
-        self.longname_label.setEnabled(planet_on_large)
-        self.longdistance_combo.setEnabled(planet_on_large)
-        self.longangle_combo.setEnabled(planet_on_large)
-        self.longdelta_mag_combo.setEnabled(planet_on_large)
-        self.longname_combo.setEnabled(planet_on_large)
-
-    def on_adi_changed(self, text):
-        """Update ADI-dependent controls after the ADI selection changes.
-
-        Input:
-        text: str
-            Current ADI combo-box value.
-
-        Output:
-        None
-        """
-        self.adi_enabled = text == "Yes"
-        if self.adi_enabled:
-            self.files_box.setPlaceholderText(
-                "ADI enabled: ADI processing will run on the selected path."
-            )
-        else:
-            self.files_box.setPlaceholderText(
-                ""
-            )
-        self.update_save_controls()
+        self.fardistance_label.setEnabled(planet_on_large)
+        self.farangle_label.setEnabled(planet_on_large)
+        self.fardelta_mag_label.setEnabled(planet_on_large)
+        self.farname_label.setEnabled(planet_on_large)
+        self.fardistance_combo.setEnabled(planet_on_large)
+        self.farangle_combo.setEnabled(planet_on_large)
+        self.fardelta_mag_combo.setEnabled(planet_on_large)
+        self.farname_combo.setEnabled(planet_on_large)
 
     def update_save_controls(self):
         """Enable output-folder selection only for saved ADI processing.
@@ -778,7 +745,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         Output:
         None
         """
-        save_enabled = self.adi_enabled and self.save_adi_checkbox.currentText() == "Yes"
+        save_enabled = self.save_adi_checkbox.currentText() == "Yes"
         self.save_folder_button.setEnabled(save_enabled)
         if not save_enabled:
             self.save_root = None
@@ -837,11 +804,11 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             return True
         if not self.planet_availability.combinations:
             if verbose:
-                self.log_warning_once("Planet: no valid With_Planet tree found in the base folder.")
+                self.log_warning_once("Planet: no valid Planet tree found in the base folder.")
             return False
         if not self.planet_availability.is_valid():
             if verbose:
-                self.log_warning_once("Planet: this parameter combination does not exist in With_Planet.")
+                self.log_warning_once("Planet: this parameter combination does not exist in directory Planet.")
             return False
         return True
 

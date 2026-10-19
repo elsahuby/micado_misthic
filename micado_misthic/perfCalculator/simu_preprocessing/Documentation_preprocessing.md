@@ -163,12 +163,12 @@ This function checks whether a simulation matches the requested coronagraph, NCP
 
 ### **get_output_directory()**
 
-This function builds the output directory path from the simulation metadata. The path follows the order: output_main_directory / With_Planet or No_Planet / corono / ncpa / seeing / z / filter / distance. The z, filter and distance components are omitted when their values are None.
+This function builds the output directory path from the simulation metadata. The path follows the order: output_main_directory / Planet or CoroStar / corono / ncpa / seeing / z / filter / distance. The z, filter and distance components are omitted when their values are None.
 <p style="margin-bottom: 0;"><u>Input:</u></p>
 <ul style="margin-top: 0;">
   <li><em>output_main_directory</em>: Root directory for the preprocessed data.</li>
   <li><em>simulation</em>: Simulation dictionary containing corono, ncpa, seeing, z, filter and distance.</li>
-  <li><em>planet_on</em>: Set to 1 to use the With_Planet directory, or 0 to use No_Planet.</li>
+  <li><em>planet_on</em>: Set to 1 to use the Planet directory, or 0 to use CoroStar.</li>
 </ul>
 
 <p style="margin-bottom: 0;"><u>Output:</u></p>
@@ -193,7 +193,7 @@ The function checks each requested sampling value against the wavelength and the
   <li><em>output_main_directory</em>: Root directory where the resampled simulations will be saved.</li>
   <li><em>input_directory</em>: Root directory containing the input simulation branches.</li>
   <li><em>sampling_factor</em>: List of target pixel scales in milliarcseconds per pixel ([1.5, 4.0]).</li>
-  <li><em>planet_on</em>: Select simulations with a planet (1) or without a planet (0). Simulations with a planet are identified by a p_dist_mas=... directory in their path. This parameter also determines whether outputs are stored under With_Planet or No_Planet.</li>
+  <li><em>planet_on</em>: Select simulations with a planet (1) or without a planet (0). Simulations with a planet are identified by a p_dist_mas=... directory in their path. This parameter also determines whether outputs are stored under Planet or CoroStar.</li>
   <li><em>corono</em>: Requested coronagraph identifier (e.g. "CLC1"), or None to accept any coronagraph. (OPTIONAL)</li>
   <li><em>ncpa</em>: Requested NCPA value ("NCPA" or "NoNCPA"), or None to accept either value. (OPTIONAL)</li>
   <li><em>seeing</em>: Requested seeing value, or None to accept any seeing. (OPTIONAL)</li>

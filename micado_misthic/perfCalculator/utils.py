@@ -1,5 +1,5 @@
 """
-Author: Tristan Deseine
+Author: Tristan Deseine, Pierre Baudoz
 """
 
 import os
@@ -213,7 +213,6 @@ def add_noise_after_adi(
             }
     n_frames = file_info["n_frames"]
     mean_abs_cube = file_info["mean_abs_cube"]
-    print(np.shape(mean_abs_cube), np.shape(adi_sum))
     if np.shape(mean_abs_cube) != np.shape(adi_sum):
         raise ValueError("Mean image and ADI image must have the same dimensions.")
     if not np.isfinite(n_frames) or n_frames <= 0 or int(n_frames) != n_frames:

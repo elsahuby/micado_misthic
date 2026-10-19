@@ -1,5 +1,5 @@
 """
-Author: Tristan Deseine
+Author: Tristan Deseine, Pierre Baudoz
 """
 
 from datetime import datetime
@@ -39,7 +39,7 @@ class OutputMethods:
             slug_parts.append(params["observation_time"])
         if params["magnitude"] is not None:
             slug_parts.append(f"mag{params['magnitude']:g}")
-        if params["planet"] == "With_Planet":
+        if params["planet"] == "Planet":
             slug_parts.append(f"pdist{params['planet_distance']:g}mas")
             if params["delta_magnitude"] is not None:
                 slug_parts.append(f"dmag{params['delta_magnitude']:g}")
@@ -102,7 +102,7 @@ class OutputMethods:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir = Path(save_root) / timestamp
         output_dir.mkdir(parents=True, exist_ok=True)
-        self.last_no_planet_output_dir = None
+        self.last_corostar_output_dir = None
         return output_dir
 
     def save_noise_inputs(self, output_dir, original_cube, processed_cube, original_psf, processed_psf):
@@ -119,9 +119,9 @@ class OutputMethods:
         Output:
         None
         """
-        noise_dir = Path(output_dir) / "No_Planet" / "noisy_images"
+        noise_dir = Path(output_dir) / "CoroStar" / "noisy_images"
         noise_dir.mkdir(parents=True, exist_ok=True)
-        params_slug = self.build_params_slug(planet_folder="No_Planet")
+        params_slug = self.build_params_slug(planet_folder="CoroStar")
 
         paths = [
             noise_dir / f"{params_slug}_image_cube_original.fits",
@@ -230,7 +230,7 @@ class OutputMethods:
             )
             return None
 
-    def save_adi_results(self, adi_sum, psf_sum, output_dir):
+    def save_adi_results(self, adi_sum, psf_sum, output_dir, adi_sum_conv= None, adi_sum_ADU= None):
         """Save the final stellar ADI and PSF products.
 
         Input:
@@ -243,23 +243,34 @@ class OutputMethods:
         paths: tuple[Path, Path]
             Saved ADI and PSF paths.
         """
-        output_dir = Path(output_dir) / "No_Planet"
+        output_dir = Path(output_dir) / "CoroStar"
         output_dir.mkdir(parents=True, exist_ok=True)
-        params_slug = self.build_params_slug(planet_folder="No_Planet")
-        self.last_no_planet_output_dir = output_dir
+        self.last_corostar_output_dir = output_dir
 
-        adi_sum_path = output_dir / f"{params_slug}_adi.fits"
-        psf_sum_path = output_dir / f"{params_slug}_psf.fits"
-
+        params_slug = self.build_params_slug(planet_folder="Norm_CoroStar")
+        adi_sum_path = output_dir / f"{params_slug}_adi_noisy.fits"
         self.write_fits(adi_sum_path, adi_sum, product="STAR_ADI")
+
+        if adi_sum_conv is not None:
+            params_slug = self.build_params_slug(planet_folder="NormConvol_CoroStar")
+            adi_sum_path = output_dir / f"{params_slug}_adi_noisy.fits"
+            self.write_fits(adi_sum_path, adi_sum_conv, product="STAR_ADI")
+
+        if adi_sum_ADU is not None:
+            params_slug = self.build_params_slug(planet_folder="ADU_CoroStar")
+            adi_sum_path = output_dir / f"{params_slug}_adi_noisy.fits"
+            self.write_fits(adi_sum_path, adi_sum_ADU, product="STAR_ADI")
+
+        params_slug = self.build_params_slug(planet_folder="ADU_Star")
+        psf_sum_path = output_dir / f"{params_slug}_psf_no_noise.fits"
         self.write_fits(psf_sum_path, psf_sum, product="PSF")
 
         self.files_box.append(
-            f"No_Planet ADI results saved:\n- {adi_sum_path}\n- {psf_sum_path}"
+            f"CoroStar ADI results saved:\n- {adi_sum_path}\n- {psf_sum_path}"
         )
         return adi_sum_path, psf_sum_path
 
-    def save_planet_adi_result(self, adi_sum, output_dir):
+    def save_planet_adi_result(self, adi_sum, output_dir, adi_sum_conv= None, adi_sum_ADU= None):
         """Save the final planet ADI image.
 
         Input:
@@ -272,14 +283,26 @@ class OutputMethods:
         adi_path: Path
             Saved planet FITS path.
         """
-        output_dir = Path(output_dir) / "With_Planet"
+        output_dir = Path(output_dir) / "Planet"
         output_dir.mkdir(parents=True, exist_ok=True)
-        params_slug = self.build_params_slug(planet_folder="With_Planet")
+        params_slug = self.build_params_slug(planet_folder="Norm_Planet")
 
-        adi_sum_path = output_dir / f"{params_slug}_planet_adi.fits"
+        adi_sum_path = output_dir / f"{params_slug}_planet_adi_noisy.fits"
         self.write_fits(adi_sum_path, adi_sum, product="PLANET_ADI")
 
-        self.files_box.append(f"With_Planet ADI result saved:\n- {adi_sum_path}")
+        if adi_sum_conv is not None:
+            params_slug = self.build_params_slug(planet_folder="NormConvol_Planet")
+            adi_sum_path = output_dir / f"{params_slug}_planet_adi_noisy.fits"
+            self.write_fits(adi_sum_path, adi_sum_conv, product="PLANET_ADI")
+
+        if adi_sum_ADU is not None:
+            params_slug = self.build_params_slug(planet_folder="ADU_Planet")
+            adi_sum_path = output_dir / f"{params_slug}_planet_adi_noisy.fits"
+            self.write_fits(adi_sum_path, adi_sum_ADU, product="PLANET_ADI")
+
+
+
+        self.files_box.append(f"Planet ADI result saved:\n- {adi_sum_path}")
         return adi_sum_path
 
     def save_contrast_curveGUI(self, x, contrast, output_dir, 
@@ -300,7 +323,7 @@ class OutputMethods:
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        params_slug = self.build_params_slug(planet_folder="No_Planet")
+        params_slug = self.build_params_slug(planet_folder="CoroStar")
 
         fits_path = output_dir / f"{params_slug}_contrast_curve.fits"
 

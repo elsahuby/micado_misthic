@@ -42,7 +42,7 @@ def resampling(
         Select simulations with a planet (1) or without a planet (0).
         Simulations with a planet are identified by a p_dist_mas=... directory
         in their path. This parameter also determines whether outputs are stored
-        under With_Planet or No_Planet. Planet data has a smaller FOV => resampling
+        under "Planet" or CoroStar. Planet data has a smaller FOV => resampling
         is different (using MFT to keep the same resampling than the star images)
     corono: str or None
         The requested coronagraph identifier (e.g. "CLC1"), or None to accept
@@ -56,7 +56,7 @@ def resampling(
     processed_files = 0
     print(
         f"Starting resampling from {input_directory} "
-        f"({'With_Planet' if planet_on == 1 else 'No_Planet'} mode), "
+        f"({'"Planet"' if planet_on == 1 else 'CoroStar'} mode), "
         f"selection: corono={corono or 'all'}, ncpa={ncpa or 'all'}, "
         f"seeing={seeing or 'all'}"
     )

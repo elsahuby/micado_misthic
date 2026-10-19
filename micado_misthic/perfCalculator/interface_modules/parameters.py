@@ -1,5 +1,5 @@
 """
-Author: Tristan Deseine
+Author: Tristan Deseine, Pierre Baudoz
 """
 
 import os
@@ -25,9 +25,9 @@ class ParameterPathMethods:
 
         Output:
         planet_folder: str
-            ``With_Planet`` or ``No_Planet``.
+            ``"Planet"`` or ``CoroStar``.
         """
-        return "With_Planet" if self.planet_on_checkbox.isChecked() or self.planet_on_large_checkbox.isChecked() else "No_Planet"
+        return "Planet" if self.planet_on_checkbox.isChecked() or self.planet_on_large_checkbox.isChecked() else "CoroStar"
 
     def get_with_planet_path(self, params=None):
         """Build the planet simulation path from one set of parameters.
@@ -41,7 +41,7 @@ class ParameterPathMethods:
             Planet input directory, or None when planet processing is disabled.
         """
         params = params if params is not None else self.get_parameter_values()
-        return self.build_input_path("With_Planet", params) if params["planet"] == "With_Planet" else None
+        return self.build_input_path("Planet", params) if params["planet"] == "Planet" else None
 
     def auto_detect_flux_folder(self):
 
@@ -179,13 +179,13 @@ class ParameterPathMethods:
             Planet photon flux, emission per pixel and global transmission.
         """
         params = params if params is not None else self.get_parameter_values()
-        if params["planet"] != "With_Planet":
+        if params["planet"] != "Planet":
             raise ValueError("Planet on must be checked before computing planet flux.")
 
         if path is None:
             path = self.get_with_planet_path(params)
         if path is None:
-            raise ValueError("With_Planet path is not available.")
+            raise ValueError("Planet path is not available.")
 
         if delta_t is None or zenith_distance is None:
             key_values = self.read_config_values_from_path(
@@ -272,14 +272,14 @@ class ParameterPathMethods:
                                      else self.distance_combo.currentText().replace(" mas", "")),
             "planet_name": [0 if self.planet_on_large_checkbox.isChecked() is False 
                                      else v.strip() for v in self.planetname_combo.text().split(",")],
-            "long_planet_distance": [0 if self.planet_on_large_checkbox.isChecked() is False 
-                                     else float(v.strip()) for v in self.longdistance_combo.text().split(",")],
-            "long_planet_deltamag": [0 if self.planet_on_large_checkbox.isChecked() is False 
-                                     else float(v.strip()) for v in self.longdelta_mag_combo.text().split(",")],
-            "long_planet_pa": [0 if self.planet_on_large_checkbox.isChecked() is False 
-                                     else float(v.strip()) for v in self.longangle_combo.text().split(",")],
-            "long_planet_name": [0 if self.planet_on_large_checkbox.isChecked() is False 
-                                     else v.strip() for v in self.longname_combo.text().split(",")],
+            "far_planet_distance": [0 if self.planet_on_large_checkbox.isChecked() is False 
+                                     else float(v.strip()) for v in self.fardistance_combo.text().split(",")],
+            "far_planet_deltamag": [0 if self.planet_on_large_checkbox.isChecked() is False 
+                                     else float(v.strip()) for v in self.fardelta_mag_combo.text().split(",")],
+            "far_planet_pa": [0 if self.planet_on_large_checkbox.isChecked() is False 
+                                     else float(v.strip()) for v in self.farangle_combo.text().split(",")],
+            "far_planet_name": [0 if self.planet_on_large_checkbox.isChecked() is False 
+                                     else v.strip() for v in self.farname_combo.text().split(",")],
             "clc": self.clc_combo.currentText(),
             "ncpa": "NCPA" if self.ncpa_combo.currentText() == "Yes" else "NoNCPA",
             "seeing": self.seeing_combo.currentText(),
@@ -303,7 +303,7 @@ class ParameterPathMethods:
             params[key] = float(text) if text else None
 
         if params["declination"] is not None:
-            input_path = params["base_folder"] / "No_Planet" / self.resolve_clc_folder(params["base_folder"] / "No_Planet", params["clc"]) / params["ncpa"] / params["seeing"]
+            input_path = params["base_folder"] / "CoroStar" / self.resolve_clc_folder(params["base_folder"] / "CoroStar", params["clc"]) / params["ncpa"] / params["seeing"]
             zenith = self.compute_nearest_zenithal_distance(params["declination"])
             zenith = self.check_zenith_folder(input_path, zenith)
             params["z_dist"] = f"{zenith:g}"
@@ -311,7 +311,7 @@ class ParameterPathMethods:
         if validate:
             if params["noise"] and params["magnitude"] is None:
                 raise ValueError("A star magnitude is required for noise calculation.")
-            if params["planet"] == "With_Planet" and params["delta_magnitude"] is None:
+            if params["planet"] == "Planet" and params["delta_magnitude"] is None:
                 raise ValueError("A delta magnitude is required for the planet.")
         return params
 
@@ -320,7 +320,7 @@ class ParameterPathMethods:
 
         Input:
         planet_folder: str
-            ``With_Planet`` or ``No_Planet``.
+            ``"Planet"`` or ``CoroStar``.
         params: dict
             Parameters collected when processing started.
 
@@ -329,7 +329,7 @@ class ParameterPathMethods:
             Expected simulation directory.
         """
         input_root = params["base_folder"] / planet_folder
-        if planet_folder == "No_Planet" and not input_root.is_dir():
+        if planet_folder == "CoroStar" and not input_root.is_dir():
             input_root = params["base_folder"]
         input_path = input_root / self.resolve_clc_folder(input_root, params["clc"]) / params["ncpa"] / params["seeing"]
         if params["declination"] is not None:
@@ -337,7 +337,7 @@ class ParameterPathMethods:
             zenith = self.check_zenith_folder(input_path, zenith)
             input_path /= f"z={zenith:g}"
         input_path /= f"filter{params['wavelength']:.3f}/Samp{params['sampling']}"
-        if planet_folder == "With_Planet":
+        if planet_folder == "Planet":
             input_path /= f"p_dist_mas={params['planet_distance']:g}"
         return input_path / params["observation_time"] if params["observation_time"] else input_path
 
@@ -354,11 +354,11 @@ class ParameterPathMethods:
         try:
             params = self.get_parameter_values(for_paths=True)
         except ValueError:
-            self.no_planet_path = None
+            self.corostar_path = None
             self.path_box.clear()
             return  # A numeric field can be incomplete while the user is typing.
-        self.no_planet_path = self.build_input_path("No_Planet", params)
-        self.path_box.setText(str(self.no_planet_path) + os.sep)
+        self.corostar_path = self.build_input_path("CoroStar", params)
+        self.path_box.setText(str(self.corostar_path) + os.sep)
 
     def update_paths_zenith(self, *_):
         """Refresh the input path preview after a relevant UI change."""
