@@ -447,6 +447,16 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         run_button.clicked.connect(self.run_processing)
         left_layout.addWidget(run_button)
         left_layout.addStretch(1)
+
+        # Information box
+        self.info_simul = QTextEdit("Waiting for calculation...")
+        self.info_simul.setFixedHeight(80)
+        self.info_simul.setReadOnly(True)
+        self.info_simul.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
+        self.info_simul.setStyleSheet("""
+            QLabel {background-color: #eeeeee; border: 1px solid #aaaaaa; border-radius: 5px;padding: 10px;}
+        """)
+        left_layout.addWidget(self.info_simul)
         ###
 
         main_layout.addWidget(left_frame, 0)

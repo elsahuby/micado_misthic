@@ -298,7 +298,7 @@ def run_before_after_adi_test(
         parallactic_dir,
         adi_file=input_files["adi_sum"] if Path(parallactic_dir) == test_dir else None,
     )
-    apres_adi_noisy = add_noise_after_adi(
+    apres_adi_noisy, _ = add_noise_after_adi(
         apres_adi_clean,
         perf_psf_data,
         noise_info,

@@ -284,7 +284,6 @@ class ProcessingMethods:
         params = params if params is not None else self.get_parameter_values()
         planet_path = self.build_input_path("CoroStar", params)
         # Case of planet distant enough so that coronagraph have small impact on it
-        print(params["planet_distance"],params["far_planet_distance"],np.sum(params["far_planet_distance"]) )
         if params["planet_distance"] == 0 and np.sum(params["far_planet_distance"]) == 0:
             print("!!!!!!!!!!!!!!!   NO planet.    !!!!!!!!!!!!!!!!!")
             return None
@@ -333,7 +332,7 @@ class ProcessingMethods:
                 planet_photon_flux, _, _ = self.get_planet_micado_flux(
                     path=planet_path, delta_t=delta_t, zenith_distance=zenith_distance, params=params,delta_mag = d_mag)
                 # sigron=0 because the noise has already been applied to the stellar ADI, and the planet is added to that image. The read noise is already present in the stellar ADI.
-                planet_adi_sum = add_noise_after_adi(planet_cube_adi, perf_psf_data, mean_file, photon_flux=planet_photon_flux,
+                planet_adi_sum, _ = add_noise_after_adi(planet_cube_adi, perf_psf_data, mean_file, photon_flux=planet_photon_flux,
                     sig_ron=0., emission_flux=0., frame_exp_time=frame_exp_time, silent=True,)
                 planet_adi_sum, planet_adi_sum_conv = self.planet_norm_and_convolve(params, planet_adi_sum)
                 all_planet_adi += planet_adi_sum
@@ -365,13 +364,11 @@ class ProcessingMethods:
             planet_photon_flux, _, _ = self.get_planet_micado_flux(
                 path=planet_path, delta_t=delta_t, zenith_distance=zenith_distance, params=params,delta_mag = delta_mag)
             # sigron=0 because the noise has already been applied to the stellar ADI, and the planet is added to that image. The read noise is already present in the stellar ADI.
-            planet_adi_sum = add_noise_after_adi(planet_cube_adi, perf_psf_data, mean_file, photon_flux=planet_photon_flux,
+            planet_adi_sum, _ = add_noise_after_adi(planet_cube_adi, perf_psf_data, mean_file, photon_flux=planet_photon_flux,
                 sig_ron=0., emission_flux=0., frame_exp_time=frame_exp_time, silent=True,)
             planet_adi_sum, planet_adi_sum_conv = self.planet_norm_and_convolve(params, planet_adi_sum)
             all_planet_adi += planet_adi_sum
             all_planet_adi_conv += planet_adi_sum_conv
-            
-        print("contrast:", self.last_planet_contrast,len(self.last_planet_contrast))
         self.save_planet_adi_result(all_planet_adi, output_dir, adi_sum_conv= all_planet_adi_conv)
         return all_planet_adi_conv
 
@@ -624,22 +621,38 @@ class ProcessingMethods:
         if noise_applied:
             adi_sum_clean = fits.getdata(adi_file)
             self.files_box.append(f"Using preprocessed cube mean: {mean_file.name}")
+            psf_sum = np.asarray(fits.getdata(psf_sum_file), dtype=np.float64)
+            values = []
+            if params["planet_distance"] != 0:
+                values.append(params["delta_magnitude"])
+            if np.sum(params["far_planet_distance"]) != 0:
+                values.extend(params["far_planet_deltamag"])
+            
+            if values:
+                max_planet = (10**(-min(values)/2.5))
+            else:
+                max_planet = 0
+
+            print("Max_planet", max_planet)
             try:
-                adi_sum_ADU = add_noise_after_adi(
+                adi_sum_ADU, exp_time_dit = add_noise_after_adi(
                     adi_sum_clean,
                     perf_psf_data,
                     mean_file,
                     silent=True,
+                    max_planet=max_planet,
                     **noise_parameters,
                 )
+                params["exp_time_dit"]=exp_time_dit
             except (OSError, ValueError, KeyError) as error:
                 QMessageBox.warning(self, "Invalid noise inputs", str(error))
                 return
-            psf_sum = np.asarray(fits.getdata(psf_sum_file), dtype=np.float64)
             psf_sum_ADU = psf_sum * noise_parameters["photon_flux"] / perf_psf_data
         else:
             adi_sum_ADU = fits.getdata(adi_file)
             psf_sum_ADU = fits.getdata(psf_sum_file)
+
+        self.files_box.append(f"Exposure_time: {exp_time_dit:.2f} s.")
 
         wavelength, pixel_scale = params["wavelength"], params["sampling"]
         #adi_sum, psf_sum = self.convolve_adi_and_psf(
@@ -672,7 +685,8 @@ class ProcessingMethods:
 
         total_time_elapsed = time.time() - total_time_start
         self.files_box.append(f"Total ADI processing function time: {total_time_elapsed:.1f} s.")
-
+        self.display_info_simul( exp_time_dit, params)
+                        
     def normalize_adi_by_psf(self, adi_sum, psf_sum, label, psf_label=None):
         """Normalize an ADI image by a PSF maximum and report the operation.
 

@@ -165,7 +165,7 @@ class PlottingMethods:
                     self.files_box.append(legend_name)
         print(params)
         legend_conditions = [f'{params["clc"]} - seeing: {params["seeing"]} - {params["ncpa"]} - filter: {params["filter"]} - sampling: {params["sampling"]}mas',
-                              f'Star magnitude: {params["magnitude"]} - Zenith dist: {params["z_dist"]}° - Exposure time= {params["observation_time"]}']                        
+                              f'Star mag: {params["magnitude"]} - Zenith dist: {params["z_dist"]}° - Observation time= {params["observation_time"]} - DIT: {params["exp_time_dit"]:.3f}s']                        
 
         self.display_contrast_curve(x, rms_contrast, 
                     planet_distance_mas=planet_distance_mas, planet_contrast=planet_contrast, planet_legend_name = planet_legend_name, legend_conditions=legend_conditions)
@@ -216,3 +216,32 @@ class PlottingMethods:
         self.contrast_figure.tight_layout()
         self.contrast_canvas.draw()
         self.tab_widget.setCurrentWidget(self.contrast_tab)
+
+    def display_info_simul(self, exp_time_dit, params):
+        
+        fov = 4096. / 1.3 * exp_time_dit * params["sampling"] / 1000.
+        if fov < 0.5:
+            self.info_simul.setHtml(f"""
+                <span style="color: red;">SATURATION RISK:</span><br>
+                DIT is too low <span style="color: red;">({exp_time_dit:.3f} s) </span>to get a fov > 0.5 arcsec x 6 arcsec<br>
+                Here FOV: <span style="color: red;">{fov:.2f} arcsec x 6 arcsec</span><br>
+                <span style="color: red;">Choose fainter star or use ND filters</span>"""
+            )
+        if fov >= 0.5 and fov < 6:
+            self.info_simul.setHtml(f"""
+                <span style="color: orange;">SATURATION RISK:</span><br>
+                DIT <span style="color: orange;">({exp_time_dit:.3f} s) </span>requires smaller FOV<br>
+                Here FOV: <span style="color: orange;">({fov:.2f} arcsec x 6 arcsec)</span> <br>
+                <span style="color: orange;">or using ND filters)</span>"""
+            )
+        if fov > 6 and exp_time_dit >10:
+            self.info_simul.setHtml(f"""
+                <span style="color: green;">NO SATURATION RISK:</span><br>
+                Optimized DIT for FWC: <span style="color: green;">({exp_time_dit:.3f} s) </span><br>
+                is replaced by DIT=10s for STARLOC"""
+            )
+        if fov > 6 and exp_time_dit <=10:
+            self.info_simul.setHtml(f"""
+                <span style="color: green;">NO SATURATION RISK:</span><br>
+                Optimized DIT for FWC: <span style="color: green;">({exp_time_dit:.3f} s) </span><br>"""
+            )

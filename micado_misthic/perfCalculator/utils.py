@@ -202,6 +202,7 @@ def add_noise_after_adi(
     frame_exp_time,
     set_ron_equivalent=True,
     silent=True,
+    max_planet=0,
 ):
     """Add noise using a noise-info dict or the path to an image_cube_mean FITS."""
     if isinstance(file_info, (str, Path)):
@@ -233,13 +234,14 @@ def add_noise_after_adi(
     noise_var = mean_abs_cube_photons * n_frames
     photon_noise = rng.poisson(noise_var) - noise_var
 
-    
+    print('max',np.max(mean_abs_cube),max_planet,np.max(mean_abs_cube_photons),max_planet*conv_factor,max(np.max(mean_abs_cube_photons),max_planet*conv_factor) / frame_exp_time)
     if sig_ron != 0:
         if set_ron_equivalent:
             full_well_capacity = 5e4
             exp_time = full_well_capacity / (
-                np.max(mean_abs_cube_photons) / frame_exp_time
+                max(np.max(mean_abs_cube_photons),max_planet*conv_factor) / frame_exp_time
             )
+            exp_time_dit = exp_time
             if exp_time <= 1.3 or exp_time >= frame_exp_time:
                 if not silent:
                     print(f"### Warning: exposure time outside desired range: {exp_time}")
@@ -252,6 +254,9 @@ def add_noise_after_adi(
             if not silent:
                 print("### No optimized-exposure scaling of the RON.")
             sig_ron = sig_ron * np.sqrt(n_frames)
+            exp_time_dit = 0 
+    else:
+        exp_time_dit = 0
 
     ron_noise = rng.normal(0.0, sig_ron, size=(height, width))
 
@@ -261,7 +266,7 @@ def add_noise_after_adi(
     else:
         emission_noise = np.zeros((height, width), dtype=np.float64)
 
-    return adi_sum + photon_noise + ron_noise + emission_noise
+    return adi_sum + photon_noise + ron_noise + emission_noise, exp_time_dit
 
 
 def psf_sum_in_photons(psf_cube, perf_psf, photon_flux):

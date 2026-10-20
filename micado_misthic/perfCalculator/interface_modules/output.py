@@ -283,22 +283,23 @@ class OutputMethods:
         adi_path: Path
             Saved planet FITS path.
         """
-        output_dir = Path(output_dir) / "Planet"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        params_slug = self.build_params_slug(planet_folder="Norm_Planet")
+        if output_dir is not None:
+            output_dir = Path(output_dir) / "Planet"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            params_slug = self.build_params_slug(planet_folder="Norm_Planet")
 
-        adi_sum_path = output_dir / f"{params_slug}_planet_adi_noisy.fits"
-        self.write_fits(adi_sum_path, adi_sum, product="PLANET_ADI")
-
-        if adi_sum_conv is not None:
-            params_slug = self.build_params_slug(planet_folder="NormConvol_Planet")
             adi_sum_path = output_dir / f"{params_slug}_planet_adi_noisy.fits"
-            self.write_fits(adi_sum_path, adi_sum_conv, product="PLANET_ADI")
+            self.write_fits(adi_sum_path, adi_sum, product="PLANET_ADI")
 
-        if adi_sum_ADU is not None:
-            params_slug = self.build_params_slug(planet_folder="ADU_Planet")
-            adi_sum_path = output_dir / f"{params_slug}_planet_adi_noisy.fits"
-            self.write_fits(adi_sum_path, adi_sum_ADU, product="PLANET_ADI")
+            if adi_sum_conv is not None:
+                params_slug = self.build_params_slug(planet_folder="NormConvol_Planet")
+                adi_sum_path = output_dir / f"{params_slug}_planet_adi_noisy.fits"
+                self.write_fits(adi_sum_path, adi_sum_conv, product="PLANET_ADI")
+
+            if adi_sum_ADU is not None:
+                params_slug = self.build_params_slug(planet_folder="ADU_Planet")
+                adi_sum_path = output_dir / f"{params_slug}_planet_adi_noisy.fits"
+                self.write_fits(adi_sum_path, adi_sum_ADU, product="PLANET_ADI")
 
 
 
