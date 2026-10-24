@@ -70,6 +70,8 @@ def scale_to_photons(img_cube, perf_psf, photon_flux, emission_flux,
                      set_ron_equivalent=True, silent=True):
     """
     Convert the image levels into photons and include the photon noise and read out noise.
+    Oct-2026: Removed calculation of perfect_psf_noisy (useless) and 
+    adding possibility of sending either the perf_psf 2D image or the sum of it directly
     """
 
 
@@ -84,7 +86,10 @@ def scale_to_photons(img_cube, perf_psf, photon_flux, emission_flux,
     ones_array = np.ones_like(img_cube)
     
     ### convert into mean photon numbers
-    perf_psf_sum = np.sum(perf_psf)
+    if len(perf_psf.shape) == 2:
+        perf_psf_sum = np.sum(perf_psf)
+    else:
+        perf_psf_sum = perf_psf
     conv_factor = photon_flux / perf_psf_sum # convert from ADU to photons !         
 
     # psf_photon_flux = np.sum(psf_cube) * conv_factor
@@ -92,20 +97,14 @@ def scale_to_photons(img_cube, perf_psf, photon_flux, emission_flux,
     
     if len(img_cube.shape) == 2:
         img_cube = img_cube[np.newaxis,:,:]
-        
-    # if len(img_cube.shape) == 2:
-    #     mean_psf = np.sum(img_cube)
-    #     flux_per_frame = photon_flux/mean_psf
-    # elif len(img_cube.shape) == 3:
-    #     mean_psf         = np.sum(img_cube, axis=(1,2))
-    #     # flux_per_frame = np.expand_dims(photon_flux/mean_psf, (1,2))
     
     img_cube_sum = np.sum(img_cube, axis=(1,2)).mean()
     
     # print('conv_factor = ', conv_factor)
     img_cube = np.abs(img_cube) * conv_factor
     # psf_cube = np.abs(psf_cube) * conv_factor
-    perf_psf = np.abs(perf_psf) * conv_factor
+    if len(perf_psf.shape) == 2:
+        perf_psf = np.abs(perf_psf) * conv_factor
 
     flux_per_frame = np.sum(img_cube, axis=(1,2)).mean()
     
@@ -125,9 +124,6 @@ def scale_to_photons(img_cube, perf_psf, photon_flux, emission_flux,
         if not silent:
             print(f"### Total Flux (within scale_to_photon func): {photon_flux:.3e}")
         img_cube_noisy = rng.poisson(img_cube)
-        
-        # psf_cube_noisy  = rng.poisson(psf_cube)
-        perf_psf_noisy  = rng.poisson(perf_psf)
 
         # Readout noise (assuming exp 1.3s<time<30s)
         FWC = 5e4 # Full Well Capacity of the detector
@@ -157,26 +153,20 @@ def scale_to_photons(img_cube, perf_psf, photon_flux, emission_flux,
                 ron_noise = sig_ron
             img_cube_noisy = img_cube_noisy + rng.standard_normal(size=(n_img,n_y,n_x)) * ron_noise    # RON is a gaussian noise 
             # psf_cube_noisy  = psf_cube_noisy + rng.standard_normal(size=(n_img,n_y,n_x)) * noise_eq
-            perf_psf_noisy  = perf_psf_noisy + rng.standard_normal(size=(n_y,n_x)) * ron_noise
-        
+
         # Emission noise ---------------------------------------
         if emission_flux != 0:
             img_cube_noisy = img_cube_noisy + rng.poisson(ones_array * emission_flux * frame_exp_time) # also poisson noise
             # psf_cube_noisy = psf_cube_noisy + rng.poisson(ones_array * emission_flux * frame_exp_time)
-            perf_psf_noisy = perf_psf_noisy + rng.poisson(ones_array[0] * emission_flux * frame_exp_time)
     else:
         img_cube_noisy = img_cube + ones_array * emission_flux * frame_exp_time
         # psf_cube_noisy = psf_cube + ones_array * emission_flux * frame_exp_time
-        perf_psf_noisy = perf_psf + ones_array[0] * emission_flux * frame_exp_time
 
     if nocube:
         img_cube_noisy = img_cube_noisy[0]
     
 
-  
-
-
-    return img_cube_noisy, perf_psf_noisy, flux_per_frame
+    return img_cube_noisy, flux_per_frame
 
 def get_aperture_surface(aperture_filename, diam_pix=1015, diam_m = 38.542):
     
@@ -187,7 +177,7 @@ def get_aperture_surface(aperture_filename, diam_pix=1015, diam_m = 38.542):
     return aperture_surface
 
 def get_micado_flux(flux_dir, spectrum, filter_type, obs_time, aperture_surface_m2, 
-                    airmass=1, pixel_scale=4, tel_diam=38.542, display_plot=False):
+                    airmass=1, pixel_scale=4, tel_diam=38.542, display_plot=False, ND_lyot = 0):
     '''
     Return the photon flux for a given target and instrument configuration.
     Inputs:
@@ -217,6 +207,7 @@ def get_micado_flux(flux_dir, spectrum, filter_type, obs_time, aperture_surface_
     # airmass is set to 1 by default
     # pixel_scale is set to 4 mas by default
     
+    tr_nd0       = fits.getdata(flux_dir+'Transmission_ND1_3_v2026.fits') #include nd transmission
     tr_filter0  = fits.getdata(flux_dir+'Transmission_filter_J1J2H1H2K1K2_v2026.fits') # update 01/07/2026 Tristan (2020 -> 2026)
     tr_filter1  = fits.getdata(flux_dir+'Transmission_filter_JHK.fits')
     tr_atmo0    = fits.getdata(flux_dir+'Transmission_atmo_airmass=1_to_3.fits')
@@ -266,11 +257,20 @@ def get_micado_flux(flux_dir, spectrum, filter_type, obs_time, aperture_surface_
     
     # Total emission in the filter
     l_over_d = wave_tr*1e-6/tel_diam*180./np.pi*3600.*1000. # mas
-    print(tr_filter)
     emission_per_pix = np.sum(emission * tr_filter * (pixel_scale/l_over_d)**2) * wave_step * obs_time # in photons
 
+    #Include possible ND Lyot
+    if ND_lyot != 0:
+        if ND_lyot == 1:
+            tr_nd=tr_nd0[0,:]
+        if ND_lyot == 3:
+            tr_nd=tr_nd0[1,:]
+    else:
+        tr_nd =1.
+  
+
     # Total flux in the Final Pupil plane w/o coronagraph
-    tr_inst = tr_filter * tr_inst_tel
+    tr_inst = tr_filter * tr_inst_tel * tr_nd
     final_photon_flux = np.sum(tr_inst*tr_atmo*flux) * wave_step * obs_time # in photons
 
     # Output transmission

@@ -1,5 +1,5 @@
 """
-Author: Tristan Deseine
+Author: Tristan Deseine, P. Baudoz
 """
 
 import os
@@ -109,7 +109,7 @@ def select_observation_time(desired_time, cube, angles, delta_t):
     start = max(0, min(start, cube.shape[0] - Number_of_img)) 
     stop = start + Number_of_img
 
-    return cube[start:stop], angles[start:stop]
+    return cube[start:stop], angles[start:stop], start
 
 def format_observation_time(duration_seconds):
     """
@@ -379,7 +379,7 @@ def get_output_directory(output_main_directory, simulation, planet_on):
     This function builds the output directory path from the simulation metadata.
 
     The path follows the order:
-    output_main_directory / With_Planet or No_Planet / corono / ncpa /
+    output_main_directory / "Planet" or CoroStar / corono / ncpa /
     seeing / z / filter / distance.
 
     The z, filter and distance components are omitted when their values are None.
@@ -391,7 +391,7 @@ def get_output_directory(output_main_directory, simulation, planet_on):
         The simulation dictionary containing corono, ncpa, seeing, z, filter
         and distance.
     planet_on: int
-        Set to 1 to use the With_Planet directory, or 0 to use No_Planet.
+        Set to 1 to use the "Planet" directory, or 0 to use CoroStar.
 
     Output:
     output_directory: str
@@ -403,7 +403,7 @@ def get_output_directory(output_main_directory, simulation, planet_on):
         added or if the order of the tree configuration changes.
     """
     
-    planet_directory = "With_Planet" if planet_on == 1 else "No_Planet"
+    planet_directory = "Planet" if planet_on == 1 else "CoroStar"
     parts = [
         output_main_directory,
         planet_directory,
@@ -411,7 +411,7 @@ def get_output_directory(output_main_directory, simulation, planet_on):
         simulation['ncpa'],
         simulation['seeing'],
     ]
-    for key in ('z', 'filter', 'distance'):
+    for key in ('z', 'filter'):
         if simulation[key] is not None:
             parts.append(simulation[key])
     return os.path.join(*parts)

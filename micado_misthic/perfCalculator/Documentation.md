@@ -2,9 +2,9 @@
 
 This document explains the organisation and main execution paths of the MICADO performance calculator. The calculator uses simulation products prepared by the preprocessing pipeline, optionally adds noise, displays the resulting ADI images and exports scientific products.
 
-**Author:** Tristan Deseine <br>
+**Author:** Tristan Deseine, Pierre Baudoz <br>
 **Creation date:** 28/09/2026 <br>
-**Last update:** 29/09/2026
+**Last update:** 19/10/2026
 
 ## Repository overview
 
@@ -36,7 +36,7 @@ The selected interface parameters build a directory following this structure:
 
 ```text
 base_folder/
-└── No_Planet or With_Planet/
+└── CoroStar or "Planet"/
     └── coronagraph/NCPA/seeing/z/filter/
         └── [planet distance]/sampling/[observation time]
 ```
@@ -50,7 +50,7 @@ When the user clicks **Run**, `run_processing()` performs the following steps:
 ```text
 run_processing()
 ├── get_parameter_values(validate=True)
-├── build_input_path("No_Planet", params)
+├── build_input_path("CoroStar", params)
 └── process_precomputed_stellar_adi_then_add_noise()
 ```
 
@@ -120,12 +120,12 @@ When **Save ADI** is enabled, a dated run directory is created with the followin
 
 ```text
 YYYYMMDD_HHMMSS/
-├── No_Planet/
+├── CoroStar/
 │   ├── *_adi.fits
 │   └── *_psf.fits
-├── With_Planet/
+├── "Planet"/
 │   └── *_planet_adi.fits
-├── Reconstructed/
+├── StarAndPlanet/
 │   └── *_star_planet_adi.fits
 └── Contrast_Curve/
     ├── *_contrast_curve.fits

@@ -1,9 +1,9 @@
 """
-Author: Tristan Deseine
+Author: Tristan Deseine, Pierre Baudoz
 """
 
 import os
-
+import html
 import numpy as np
 
 from micado_misthic.perfCalculator.utils import get_planet_flux_with_deltaMag
@@ -13,6 +13,7 @@ from micado_misthic.utils.obsparams import (
     get_star_spectrum,
 )
 
+Z_FALLBACK = 20
 
 class ParameterPathMethods:
     """Parameter, flux and simulation-path helpers for the interface."""
@@ -24,9 +25,9 @@ class ParameterPathMethods:
 
         Output:
         planet_folder: str
-            ``With_Planet`` or ``No_Planet``.
+            ``"Planet"`` or ``CoroStar``.
         """
-        return "With_Planet" if self.planet_on_checkbox.isChecked() else "No_Planet"
+        return "Planet" if self.planet_on_checkbox.isChecked() or self.planet_on_large_checkbox.isChecked() else "CoroStar"
 
     def get_with_planet_path(self, params=None):
         """Build the planet simulation path from one set of parameters.
@@ -40,7 +41,7 @@ class ParameterPathMethods:
             Planet input directory, or None when planet processing is disabled.
         """
         params = params if params is not None else self.get_parameter_values()
-        return self.build_input_path("With_Planet", params) if params["planet"] == "With_Planet" else None
+        return self.build_input_path("Planet", params) if params["planet"] == "Planet" else None
 
     def auto_detect_flux_folder(self):
 
@@ -59,7 +60,7 @@ class ParameterPathMethods:
             self.flux_folder = None
             self.flux_folder_label.setText("not found")
 
-    def compute_nearest_zenithal_distance(self, declination):
+    def compute_nearest_zenithal_distance(self, declination,log=False):
 
         """
         Compute the nearest zenithal distance based on declination and the latitude.
@@ -74,37 +75,29 @@ class ParameterPathMethods:
         """
 
         z_reference = np.array([20., 40.])
-
         latitude = -24.5 
-
-
         z_meridien = np.abs(latitude - float(declination))
-
-
         nearest_z = float(z_reference[np.argmin(abs(z_reference - z_meridien))])
-        self.files_box.append(
-            f"Nearest zenithal distance for declination {declination} "
-            f"and latitude {latitude} is {nearest_z:g}"
-        )
+        if log:
+            self.files_box.append(
+                f"Nearest zenithal distance for declination {declination} "
+                f"and latitude {latitude} is {nearest_z:g}"
+            )
         return nearest_z
 
     def get_selected_observation_time(self):
         """
         Return the selected observation-time directory label.
-
         Output:
         observation_time: str or None
             Selected label, or None when unspecified.
         """
-        if self.obs_time_combo.currentIndex() == 0:
-            return None
         obs_time_text = self.obs_time_combo.currentText()
         return obs_time_text if obs_time_text else None
 
     def get_star_spectrum(self, star_mag=None, wavelength=None, display_plot=False, params=None):
         """
         Compute the selected stellar spectrum using obsparams.get_star_spectrum().
-
         Input:
         star_mag: float, optional
             Stellar magnitude; defaults to the parameters collected when processing started.
@@ -163,10 +156,10 @@ class ParameterPathMethods:
         aperture_surface = get_aperture_surface(str(params["base_folder"] / "PUPIL" / "Pupil_ELT_v03.fits"))
         return get_micado_flux(
             flux_dir, star_flux, f"{wavelength:.3f}", np.float32(delta_t), aperture_surface,
-            airmass=1 / np.cos(np.radians(zenith_distance)), pixel_scale=params["sampling"],
+            airmass=1 / np.cos(np.radians(zenith_distance)), pixel_scale=params["sampling"], ND_lyot = params["nd"],
         )
 
-    def get_planet_micado_flux(self, delta_t=None, zenith_distance=None, wavelength=None, path=None, params=None):
+    def get_planet_micado_flux(self, delta_t=None, zenith_distance=None, wavelength=None, path=None, params=None, delta_mag=None):
         """Compute MICADO flux for the selected planet.
 
         Input:
@@ -186,13 +179,13 @@ class ParameterPathMethods:
             Planet photon flux, emission per pixel and global transmission.
         """
         params = params if params is not None else self.get_parameter_values()
-        if params["planet"] != "With_Planet":
+        if params["planet"] != "Planet":
             raise ValueError("Planet on must be checked before computing planet flux.")
 
         if path is None:
             path = self.get_with_planet_path(params)
         if path is None:
-            raise ValueError("With_Planet path is not available.")
+            raise ValueError("Planet path is not available.")
 
         if delta_t is None or zenith_distance is None:
             key_values = self.read_config_values_from_path(
@@ -208,7 +201,7 @@ class ParameterPathMethods:
         if delta_t is None or zenith_distance is None:
             raise ValueError("delta_t and zenith_distance are required to compute planet flux.")
 
-        delta_mag, star_mag = params["delta_magnitude"], params["magnitude"]
+        star_mag = params["magnitude"]
         if delta_mag is None or star_mag is None:
             raise ValueError("Star magnitude and delta magnitude are required for planet flux.")
         _, star_flux = self.get_star_spectrum(star_mag=star_mag, wavelength=wavelength, params=params)
@@ -275,15 +268,27 @@ class ParameterPathMethods:
         filt, wavelength = self.filter_wavelength_combo.currentData() or ("H", "1.582 µm")
         params = {
             "planet": self.get_planet_folder(),
-            "planet_distance": float(self.Distance_combo.currentText().replace(" mas", "")),
+            "planet_distance": float(0 if self.planet_on_checkbox.isChecked() is False 
+                                     else self.distance_combo.currentText().replace(" mas", "")),
+            "planet_name": [0 if self.planet_on_large_checkbox.isChecked() is False 
+                                     else v.strip() for v in self.planetname_combo.text().split(",")],
+            "far_planet_distance": [0 if self.planet_on_large_checkbox.isChecked() is False 
+                                     else float(v.strip()) for v in self.fardistance_combo.text().split(",")],
+            "far_planet_deltamag": [0 if self.planet_on_large_checkbox.isChecked() is False 
+                                     else float(v.strip()) for v in self.fardelta_mag_combo.text().split(",")],
+            "far_planet_pa": [0 if self.planet_on_large_checkbox.isChecked() is False 
+                                     else float(v.strip()) for v in self.farangle_combo.text().split(",")],
+            "far_planet_name": [0 if self.planet_on_large_checkbox.isChecked() is False 
+                                     else v.strip() for v in self.farname_combo.text().split(",")],
             "clc": self.clc_combo.currentText(),
             "ncpa": "NCPA" if self.ncpa_combo.currentText() == "Yes" else "NoNCPA",
             "seeing": self.seeing_combo.currentText(),
             "filter": filt,
+            "nd":self.nd_filter_combo.currentData(),
             "wavelength": float(wavelength.replace("µm", "").strip()),
             "sampling": float(self.sampling_combo.currentText()),
             "observation_time": self.get_selected_observation_time(),
-            "noise": self.noise_checkbox.currentText() == "Yes",
+            "noise": True,#self.noise_checkbox.currentText() == "Yes",
             "save_adi": self.save_adi_checkbox.currentText() == "Yes",
             "base_folder": self.base_folder,
             "flux_folder": self.flux_folder,
@@ -298,10 +303,16 @@ class ParameterPathMethods:
                 raise ValueError(f"Invalid {key}: {text}")
             params[key] = float(text) if text else None
 
+        if params["declination"] is not None:
+            input_path = params["base_folder"] / "CoroStar" / self.resolve_clc_folder(params["base_folder"] / "CoroStar", params["clc"]) / params["ncpa"] / params["seeing"]
+            zenith = self.compute_nearest_zenithal_distance(params["declination"])
+            zenith = self.check_zenith_folder(input_path, zenith)
+            params["z_dist"] = f"{zenith:g}"
+
         if validate:
             if params["noise"] and params["magnitude"] is None:
-                raise ValueError("A star magnitude is required for noise.")
-            if params["planet"] == "With_Planet" and params["delta_magnitude"] is None:
+                raise ValueError("A star magnitude is required for noise calculation.")
+            if params["planet"] == "Planet" and params["delta_magnitude"] is None:
                 raise ValueError("A delta magnitude is required for the planet.")
         return params
 
@@ -310,7 +321,7 @@ class ParameterPathMethods:
 
         Input:
         planet_folder: str
-            ``With_Planet`` or ``No_Planet``.
+            ``"Planet"`` or ``CoroStar``.
         params: dict
             Parameters collected when processing started.
 
@@ -319,17 +330,16 @@ class ParameterPathMethods:
             Expected simulation directory.
         """
         input_root = params["base_folder"] / planet_folder
-        if planet_folder == "No_Planet" and not input_root.is_dir():
+        if planet_folder == "CoroStar" and not input_root.is_dir():
             input_root = params["base_folder"]
         input_path = input_root / self.resolve_clc_folder(input_root, params["clc"]) / params["ncpa"] / params["seeing"]
         if params["declination"] is not None:
             zenith = self.compute_nearest_zenithal_distance(params["declination"])
+            zenith = self.check_zenith_folder(input_path, zenith)
             input_path /= f"z={zenith:g}"
-        input_path /= f"filter{params['wavelength']:.3f}"
-        if planet_folder == "With_Planet":
-            input_path /= f"p_dist_mas={params['planet_distance']:g}/Samp{params['sampling']}"
-        else:
-            input_path /= f"samp{params['sampling']}"
+        input_path /= f"filter{params['wavelength']:.3f}/Samp{params['sampling']}"
+        if planet_folder == "Planet":
+            input_path /= f"p_dist_mas={params['planet_distance']:g}"
         return input_path / params["observation_time"] if params["observation_time"] else input_path
 
     def update_paths(self, *_):
@@ -345,11 +355,18 @@ class ParameterPathMethods:
         try:
             params = self.get_parameter_values(for_paths=True)
         except ValueError:
-            self.no_planet_path = None
+            self.corostar_path = None
             self.path_box.clear()
             return  # A numeric field can be incomplete while the user is typing.
-        self.no_planet_path = self.build_input_path("No_Planet", params)
-        self.path_box.setText(str(self.no_planet_path) + os.sep)
+        self.corostar_path = self.build_input_path("CoroStar", params)
+        self.path_box.setText(str(self.corostar_path) + os.sep)
+
+    def update_paths_zenith(self, *_):
+        """Refresh the input path preview after a relevant UI change."""
+        self.update_paths()
+        text = self.declination_combo.text().strip()
+        if text and self.declination_combo.hasAcceptableInput():
+            self.compute_nearest_zenithal_distance(float(text), log=True)
 
     def get_clc_folder_candidates(self, clc):
         """Return current and legacy directory names for a coronagraph.
@@ -363,9 +380,6 @@ class ParameterPathMethods:
             Directory names in lookup order.
         """
         candidates = [clc]
-        legacy_clc = self.clc_legacy_folder_map.get(clc)
-        if legacy_clc is not None:
-            candidates.append(legacy_clc)
         return candidates
 
     def resolve_clc_folder(self, parent_folder, clc):
@@ -385,3 +399,31 @@ class ParameterPathMethods:
             if (parent_folder / candidate).exists():
                 return candidate
         return clc
+
+    def log_warning_once(self, message):
+        """Écrit un avertissement rouge dans files_box, une seule fois par message."""
+        warned = self.__dict__.setdefault("_warned_messages", set())
+        if message in warned:
+            return
+        warned.add(message)
+        self.files_box.append(
+            f'<span style="color:red;">Warning: {html.escape(message)}</span>'
+        )
+
+    def check_zenith_folder(self, parent, zenith):
+        """Vérifie que z=<zenith> existe dans parent, sinon replie sur z=20.
+
+        Output:
+        zenith: float
+            Distance zénithale effectivement utilisée.
+        """
+        if not parent.is_dir() or (parent / f"z={zenith:g}").is_dir():
+            return zenith  # rien à vérifier, ou dossier présent
+        fallback = Z_FALLBACK
+        if zenith != fallback and (parent / f"z={fallback:g}").is_dir():
+            self.log_warning_once(
+                f"z={zenith:g} not found in {parent}; using z={fallback:g} instead."
+            )
+            return fallback
+        self.log_warning_once(f"z={zenith:g} not found in {parent}.")
+        return zenith

@@ -8,14 +8,14 @@ Click **Choose folder** and select the directory containing the preprocessed sim
 
 ```text
 base_folder/
-├── No_Planet/
-├── With_Planet/
+├── CoroStar/
+├── Planet/
 ├── Flux_input/
 └── PUPIL/
 ```
 
 The selected instrument and stellar parameters determine the simulation directory displayed below the tabs.
-The base folder should absolutely be composed of, at least, the ``"No_Planet"`` folder with simulation in it, the ``"Flux_input"`` folder and the ``"PUPIL"``. If you want to rename those 3 folders, you have to adapt the software, where they are used. Finally, the ``"With_Planet"`` folder is essential if you want to add a planet in the simulation.
+The base folder should absolutely be composed of, at least, the ``"CoroStar"`` folder with simulation in it, the ``"Flux_input"`` folder and the ``"PUPIL"``. If you want to rename those 3 folders, you have to adapt the software, where they are used. Finally, the ``"Planet"`` folder is essential if you want to add a planet in the simulation.
 
 **Note 01/10/2026:**  For now, we have two different files corresponding to the 2021 and 2026 simulations. The 2026 file does not contain any planet simulations. They are named ``2021_ADI`` and ``2026_ADI``, and are stored on the 4-terabyte ``TristanMIC2`` hard drive.
 

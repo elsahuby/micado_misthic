@@ -1,5 +1,5 @@
 """
-Author: Tristan Deseine
+Author: Tristan Deseine, Pierre Baudoz
 """
 
 import os
@@ -57,17 +57,29 @@ def find_simulation_fits(path):
 
 
 def save_contrast_curve(output_path, separation_mas, contrast,
-                        planet_distance_mas=None, planet_contrast=None):
-    """Write a 5-sigma contrast FITS table with optional planet metadata."""
-    columns = [
-        fits.Column(name="separation_mas", array=np.asarray(separation_mas, dtype=np.float64), format="D"),
-        fits.Column(name="contrast_5sigma", array=np.asarray(contrast, dtype=np.float64), format="D"),
-    ]
-    table = fits.BinTableHDU.from_columns(columns)
+                        planet_distance_mas=None, planet_contrast=None, planet_pa=None, planet_name=None, planet_delta_mag =None):
+    """Write a 5-sigma contrast FITS table"""
+    data = np.vstack([
+        np.asarray(separation_mas, dtype=np.float32),
+        np.asarray(contrast, dtype=np.float32),
+    ])  
+    hdu = fits.PrimaryHDU(data)          # 2D array as the primary HDU
+    hdu.header["ROW0"] = ("separation_mas", "Content of row 0")
+    hdu.header["ROW1"] = ("contrast_5sigma", "Content of row 1")
+
+    #    fits.Column(name="separation_mas", array=np.asarray(separation_mas, dtype=np.float64), format="D"),
+    #    fits.Column(name="contrast_5sigma", array=np.asarray(contrast, dtype=np.float64), format="D"),
+    #]
+    #table = fits.BinTableHDU.from_columns(columns)
     if planet_distance_mas is not None and planet_contrast is not None:
-        table.header["PLDIST"] = (float(planet_distance_mas), "Planet distance in mas")
-        table.header["PLCONT"] = (float(planet_contrast), "Planet contrast")
-    table.writeto(output_path, overwrite=True)
+        n_planet=len(planet_distance_mas)
+        for i in np.arange(n_planet):
+            hdu.header[f"PLDIST{i:02}"] = (float(planet_distance_mas[i]), "Planet distance in mas")
+            hdu.header[f"PLDMAG{i:02}"] = (float(planet_delta_mag[i]), "Planet  Delta Magnitude")
+            hdu.header[f"PLCONT{i:02}"] = (float(planet_contrast[i]), "Planet contrast with coronagraph")
+            hdu.header[f"PLPA{i:02}"] = (float(planet_pa[i]), "Planet Position Angle")
+            hdu.header[f"PLNAME{i:02}"] = (str(planet_name[i]), "Planet name")
+    hdu.writeto(output_path, overwrite=True)
 
 
 def normalize_by_psf_max(img, psf):
@@ -173,34 +185,35 @@ def run_adi_without_noise(cube, psf_cube, parallactic_dir, adi_file=None):
     else:
         adi_sum, _ = micado_adi(cube, psf_cube, str(parallactic_dir) + os.sep)
         fits.writeto(adi_file, adi_sum, overwrite=False)
-    noise_info = {
+    file_info = {
         "n_frames": cube.shape[0],
         "mean_abs_cube": np.mean(np.abs(cube), axis=0),
     }
-    return adi_sum, noise_info
+    return adi_sum, file_info
 
 
 def add_noise_after_adi(
     adi_sum,
     perf_psf,
-    noise_info,
+    file_info,
     photon_flux,
     sig_ron,
     emission_flux,
     frame_exp_time,
     set_ron_equivalent=True,
     silent=True,
+    max_planet=0,
 ):
     """Add noise using a noise-info dict or the path to an image_cube_mean FITS."""
-    if isinstance(noise_info, (str, Path)):
-        with fits.open(noise_info) as hdul:
+    if isinstance(file_info, (str, Path)):
+        with fits.open(file_info) as hdul:
             mean_hdu = hdul["MEAN_ABS"] if "MEAN_ABS" in hdul else hdul[0]
-            noise_info = {
+            file_info = {
                 "n_frames": hdul[0].header["NFRAMES"],
                 "mean_abs_cube": np.asarray(mean_hdu.data, dtype=np.float64),
             }
-    n_frames = noise_info["n_frames"]
-    mean_abs_cube = noise_info["mean_abs_cube"]
+    n_frames = file_info["n_frames"]
+    mean_abs_cube = file_info["mean_abs_cube"]
     if np.shape(mean_abs_cube) != np.shape(adi_sum):
         raise ValueError("Mean image and ADI image must have the same dimensions.")
     if not np.isfinite(n_frames) or n_frames <= 0 or int(n_frames) != n_frames:
@@ -221,13 +234,13 @@ def add_noise_after_adi(
     noise_var = mean_abs_cube_photons * n_frames
     photon_noise = rng.poisson(noise_var) - noise_var
 
-    
     if sig_ron != 0:
         if set_ron_equivalent:
             full_well_capacity = 5e4
             exp_time = full_well_capacity / (
-                np.max(mean_abs_cube_photons) / frame_exp_time
+                max(np.max(mean_abs_cube_photons),max_planet*conv_factor) / frame_exp_time
             )
+            exp_time_dit = exp_time
             if exp_time <= 1.3 or exp_time >= frame_exp_time:
                 if not silent:
                     print(f"### Warning: exposure time outside desired range: {exp_time}")
@@ -240,6 +253,9 @@ def add_noise_after_adi(
             if not silent:
                 print("### No optimized-exposure scaling of the RON.")
             sig_ron = sig_ron * np.sqrt(n_frames)
+            exp_time_dit = 0 
+    else:
+        exp_time_dit = 0
 
     ron_noise = rng.normal(0.0, sig_ron, size=(height, width))
 
@@ -249,7 +265,7 @@ def add_noise_after_adi(
     else:
         emission_noise = np.zeros((height, width), dtype=np.float64)
 
-    return adi_sum + photon_noise + ron_noise + emission_noise
+    return adi_sum + photon_noise + ron_noise + emission_noise, exp_time_dit
 
 
 def psf_sum_in_photons(psf_cube, perf_psf, photon_flux):

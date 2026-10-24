@@ -1,5 +1,5 @@
 """
-Author: Tristan Deseine
+Author: Tristan Deseine, Pierre Baudoz
 """
 
 from datetime import datetime
@@ -8,9 +8,7 @@ from pathlib import Path
 import numpy as np
 from configobj import ConfigObj
 
-from micado_misthic.perfCalculator.utils import (
-    save_contrast_curve as save_contrast_curve_fits,
-)
+from micado_misthic.perfCalculator.utils import save_contrast_curve 
 
 
 class OutputMethods:
@@ -41,17 +39,19 @@ class OutputMethods:
             slug_parts.append(params["observation_time"])
         if params["magnitude"] is not None:
             slug_parts.append(f"mag{params['magnitude']:g}")
-        if params["planet"] == "With_Planet":
+        if params["planet"] == "Planet":
             slug_parts.append(f"pdist{params['planet_distance']:g}mas")
             if params["delta_magnitude"] is not None:
                 slug_parts.append(f"dmag{params['delta_magnitude']:g}")
+        if params["nd"] != 0:
+            slug_parts.append(f"ND{params['nd']:g}mas")
         raw_slug = "_".join(slug_parts)
         return "".join(
             char if char.isascii() and (char.isalnum() or char in "._-") else "_"
             for char in raw_slug
         )
 
-    def write_fits(self, path, data, product=None):
+    def write_fits(self, path, data, product=None, info_planets=None ):
         """Write an image FITS with processing metadata.
 
         Input:
@@ -84,9 +84,26 @@ class OutputMethods:
             header["NORMALIZ"] = (normalized, "Divided by the stellar PSF maximum")
             header["PIXSCALE"] = (params["sampling"], "Angular pixel scale [mas/pixel]")
             header["WAVEUM"] = (params["wavelength"], "Wavelength [micrometre]")
+            header["CORO"] = (params["clc"], "Used of coronagraph")
+            header["ABERR"] = (params["ncpa"], "With or without NCPA")
+            header["SEEING"] = (params["seeing"], "Seeing quality (Q1,MED,Q4)")
+            header["STARMAG"] = (params["magnitude"], "Stellar Magnitude")
+            header["OBS_TIME"] = (params["observation_time"], "Observation time")
+            header["DIT"] = (params["exp_time_dit"], "Optimized DIT for FWC")
+            header["NDFILTER"] = (params["nd"], "Lyot ND filter (0=no,1,3)")
+
+            if info_planets is not None:
+                n_planet=len(info_planets["distance_mas"])
+                if n_planet > 0:
+                    for i in np.arange(n_planet):
+                        header[f"PLDIST{i:02}"] = (float(info_planets["distance_mas"][i]), "Planet distance in mas")
+                        header[f"PLDMAG{i:02}"] = (float(info_planets["delta_mag"][i]), "Planet  Delta Magnitude")
+                        header[f"PLCONT{i:02}"] = (float(info_planets["contrast"][i]), "Planet contrast with coronagraph")
+                        header[f"PLPA{i:02}"] = (float(info_planets["pa"][i]), "Planet Position Angle")
+                        header[f"PLNAME{i:02}"] = (str(info_planets["name"][i]), "Planet name")
 
             if params["convolved"]:
-                header["CONVKERN"] = "CIRCLE_LAMBDA/2D"
+                header["CONVKERN"] = "CIRCLE_LAMBDA/D"
                 header["TELDIAM"] = (38.542, "Diameter used for convolution [m]")
         fits.PrimaryHDU(image, header=header).writeto(path, overwrite=True)
 
@@ -104,10 +121,10 @@ class OutputMethods:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir = Path(save_root) / timestamp
         output_dir.mkdir(parents=True, exist_ok=True)
-        self.last_no_planet_output_dir = None
+        self.last_corostar_output_dir = None
         return output_dir
 
-    def save_noise_inputs(self, output_dir, original_cube, processed_cube, original_psf, processed_psf):
+    def save_noise_inputs(self, output_dir, original_cube, processed_cube, original_psf, processed_psf, silent=True):
         """Save original and noisy cubes from the NOISE-then-ADI chain.
 
         Input:
@@ -121,9 +138,9 @@ class OutputMethods:
         Output:
         None
         """
-        noise_dir = Path(output_dir) / "No_Planet" / "noisy_images"
+        noise_dir = Path(output_dir) / "CoroStar" / "noisy_images"
         noise_dir.mkdir(parents=True, exist_ok=True)
-        params_slug = self.build_params_slug(planet_folder="No_Planet")
+        params_slug = self.build_params_slug(planet_folder="CoroStar")
 
         paths = [
             noise_dir / f"{params_slug}_image_cube_original.fits",
@@ -137,15 +154,16 @@ class OutputMethods:
         self.write_fits(paths[2], original_psf)
         self.write_fits(paths[3], processed_psf)
 
-        self.files_box.append(
-            "Noise inputs saved:\n"
-            f"- {paths[0]}\n"
-            f"- {paths[1]}\n"
-            f"- {paths[2]}\n"
-            f"- {paths[3]}"
-        )
+        if not silent:
+            self.files_box.append(
+                "Noise inputs saved:\n"
+                f"- {paths[0]}\n"
+                f"- {paths[1]}\n"
+                f"- {paths[2]}\n"
+                f"- {paths[3]}"
+            )
 
-    def read_config_values_from_path(self, path, section_name, keys):
+    def read_config_values_from_path(self, path, section_name, keys, silent=True):
         """Read selected values from the simulation configuration file.
 
         Input:
@@ -166,15 +184,11 @@ class OutputMethods:
         config_files = list(path.glob("*.ini"))
 
         if not config_files:
-            self.files_box.append(
-                "Warning: Config file (*.ini) not found in path."
-            )
+            self.log_warning_once("Config file (*.ini) not found in path.")
             return None
 
         if len(config_files) > 1:
-            self.files_box.append(
-                f"Warning: Multiple config files (*.ini) found in {path}."
-            )
+            self.log_warning_once(f"Multiple config files (*.ini) found in {path}.")
             return None
 
         config_file = config_files[0]
@@ -183,7 +197,7 @@ class OutputMethods:
             config = ConfigObj(str(config_file))
 
             if section_name not in config:
-                self.files_box.append(
+                self.log_warning_once(
                     f"Warning: section [{section_name}] not found in {config_file.name}."
                 )
                 return None
@@ -195,15 +209,15 @@ class OutputMethods:
                 value = section.get(keys)
 
                 if value is None:
-                    self.files_box.append(
+                    self.log_warning_once(
                         f"Warning: {keys} not found in [{section_name}]."
                     )
                     return None
 
-                self.files_box.append(
-                    f"Config loaded from {config_file.name}: "
-                    f"[{section_name}] {keys}={value}"
-                )
+                if not silent:
+                    self.files_box.append(
+                        f"Config loaded from {config_file.name}: "
+                        f"[{section_name}] {keys}={value}")
 
                 return value
 
@@ -213,26 +227,27 @@ class OutputMethods:
                 value = section.get(key)
 
                 if value is None:
-                    self.files_box.append(
+                    self.log_warning_once(
                         f"Warning: {key} not found in [{section_name}]."
                     )
                 else:
                     values[key] = value
 
-            self.files_box.append(
-                f"Config loaded from {config_file.name}: "
-                f"[{section_name}] {values}"
-            )
+            if not silent:
+                self.files_box.append(
+                    f"Config loaded from {config_file.name}: "
+                    f"[{section_name}] {values}"
+                )
 
             return values
 
         except Exception as e:
-            self.files_box.append(
+            self.log_warning_once(
                 f"Error reading config file {config_file.name}: {str(e)}"
             )
             return None
 
-    def save_adi_results(self, adi_sum, psf_sum, output_dir):
+    def save_adi_results(self, adi_sum, psf_sum, output_dir, adi_sum_conv= None, adi_sum_ADU= None, silent=True):
         """Save the final stellar ADI and PSF products.
 
         Input:
@@ -245,23 +260,33 @@ class OutputMethods:
         paths: tuple[Path, Path]
             Saved ADI and PSF paths.
         """
-        output_dir = Path(output_dir) / "No_Planet"
+        output_dir = Path(output_dir) / "CoroStar"
         output_dir.mkdir(parents=True, exist_ok=True)
-        params_slug = self.build_params_slug(planet_folder="No_Planet")
-        self.last_no_planet_output_dir = output_dir
+        self.last_corostar_output_dir = output_dir
 
-        adi_sum_path = output_dir / f"{params_slug}_adi.fits"
-        psf_sum_path = output_dir / f"{params_slug}_psf.fits"
-
+        params_slug = self.build_params_slug(planet_folder="Norm_CoroStar")
+        adi_sum_path = output_dir / f"{params_slug}_adi_noisy.fits"
         self.write_fits(adi_sum_path, adi_sum, product="STAR_ADI")
+
+        if adi_sum_conv is not None:
+            params_slug = self.build_params_slug(planet_folder="NormConvol_CoroStar")
+            adi_sum_path = output_dir / f"{params_slug}_adi_noisy.fits"
+            self.write_fits(adi_sum_path, adi_sum_conv, product="STAR_ADI")
+
+        if adi_sum_ADU is not None:
+            params_slug = self.build_params_slug(planet_folder="ADU_CoroStar")
+            adi_sum_path = output_dir / f"{params_slug}_adi_noisy.fits"
+            self.write_fits(adi_sum_path, adi_sum_ADU, product="STAR_ADI")
+
+        params_slug = self.build_params_slug(planet_folder="ADU_Star")
+        psf_sum_path = output_dir / f"{params_slug}_psf_no_noise.fits"
         self.write_fits(psf_sum_path, psf_sum, product="PSF")
 
-        self.files_box.append(
-            f"No_Planet ADI results saved:\n- {adi_sum_path}\n- {psf_sum_path}"
-        )
+        if not silent:
+            self.files_box.append(f"CoroStar ADI results saved:\n- {adi_sum_path}\n- {psf_sum_path}")
         return adi_sum_path, psf_sum_path
 
-    def save_planet_adi_result(self, adi_sum, output_dir):
+    def save_planet_adi_result(self, adi_sum, info_planets, output_dir, adi_sum_conv= None, adi_sum_ADU= None, silent=True):
         """Save the final planet ADI image.
 
         Input:
@@ -274,23 +299,32 @@ class OutputMethods:
         adi_path: Path
             Saved planet FITS path.
         """
-        output_dir = Path(output_dir) / "With_Planet"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        params_slug = self.build_params_slug(planet_folder="With_Planet")
+        if output_dir is not None:
+            output_dir = Path(output_dir) / "Planet"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            params_slug = self.build_params_slug(planet_folder="Norm_Planet")
 
-        adi_sum_path = output_dir / f"{params_slug}_planet_adi.fits"
-        self.write_fits(adi_sum_path, adi_sum, product="PLANET_ADI")
+            adi_sum_path = output_dir / f"{params_slug}_planet_adi_noisy.fits"
+            self.write_fits(adi_sum_path, adi_sum, product="PLANET_ADI", info_planets=info_planets)
 
-        self.files_box.append(f"With_Planet ADI result saved:\n- {adi_sum_path}")
+            if adi_sum_conv is not None:
+                params_slug = self.build_params_slug(planet_folder="NormConvol_Planet")
+                adi_sum_path = output_dir / f"{params_slug}_planet_adi_noisy.fits"
+                self.write_fits(adi_sum_path, adi_sum_conv, product="PLANET_ADI", info_planets=info_planets)
+
+            if adi_sum_ADU is not None:
+                params_slug = self.build_params_slug(planet_folder="ADU_Planet")
+                adi_sum_path = output_dir / f"{params_slug}_planet_adi_noisy.fits"
+                self.write_fits(adi_sum_path, adi_sum_ADU, product="PLANET_ADI", info_planets=info_planets)
+            if not silent:
+                self.files_box.append(f"Planet ADI result saved:\n- {adi_sum_path}")
+        else:
+            adi_sum_path = None
+
         return adi_sum_path
 
-    def save_contrast_curve(
-            self,
-            x,
-            contrast,
-            output_dir,
-            planet_distance_mas=None,
-            planet_contrast=None):
+    def save_contrast_curveGUI(self, x, contrast, output_dir, 
+                    planet_distance_mas=None, planet_contrast=None, planet_pa=None, planet_name=None, planet_delta_mag = None, silent=True):
         """Save the contrast curve as FITS data and a PNG plot.
 
         Input:
@@ -307,18 +341,66 @@ class OutputMethods:
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        params_slug = self.build_params_slug(planet_folder="No_Planet")
+        params_slug = self.build_params_slug(planet_folder="CoroStar")
 
         fits_path = output_dir / f"{params_slug}_contrast_curve.fits"
 
-        save_contrast_curve_fits(
+        save_contrast_curve(
             fits_path, x, contrast,
-            planet_distance_mas=planet_distance_mas, planet_contrast=planet_contrast,
-        )
+            planet_distance_mas=planet_distance_mas, planet_contrast=planet_contrast, planet_pa=planet_pa, planet_name=planet_name, planet_delta_mag=planet_delta_mag)
         png_path = fits_path.with_suffix(".png")
         self.contrast_figure.savefig(png_path, dpi=200, bbox_inches="tight")
 
-        self.files_box.append(
-            f"Contrast curve saved:\n- {fits_path}\n- {png_path}"
-        )
+        if not silent:
+            self.files_box.append(f"Contrast curve saved:\n- {fits_path}\n- {png_path}")
         return fits_path
+
+    def create_info_planets(self,params):
+
+        if params["planet"] == "Planet" and self.last_planet_contrast is not None:
+            planet_distance_mas = []
+            planet_contrast = []
+            planet_pa =[]
+            planet_name =[]
+            planet_delta_mag = []
+            planet_legend_name = []
+            if params["planet_distance"] != 0:
+                dist = params["planet_distance"]
+                name = params["planet_name"][0]
+                d_mag = params["delta_magnitude"]
+                contrast = self.last_planet_contrast[-1]
+                planet_distance_mas.append(dist)
+                planet_contrast.append(contrast)
+                planet_pa.append(90)
+                planet_name.append(name)
+                planet_delta_mag.append(d_mag)
+                legend_name = f"{name} @ {dist:.1f} mas & PA =90° - effective contrast = {contrast:.4e} - \u0394Mag = {d_mag:.2f}"
+                planet_legend_name.append(legend_name)
+                far_last_contrast= np.float32(self.last_planet_contrast)[:-1]
+            else:
+                far_last_contrast= np.float32(self.last_planet_contrast)
+            if np.sum(params["far_planet_distance"]) != 0:
+                d_mas_multi = params["far_planet_distance"]
+                pa_multi = params["far_planet_pa"]
+                name_multi = params["far_planet_name"]
+                dmag_multi = params["far_planet_deltamag"]
+                for dist, contrast, d_pa, name, d_mag in zip(d_mas_multi, far_last_contrast, pa_multi, name_multi, dmag_multi):
+                    planet_distance_mas.append(dist)
+                    planet_contrast.append(contrast)
+                    planet_pa.append(d_pa)
+                    planet_name.append(name)
+                    planet_delta_mag.append(d_mag)
+                    legend_name = f"{name} @ {dist:.1f} mas & PA ={d_pa:.1f}° - effective contrast = {contrast:.4e} - \u0394Mag = {d_mag:.2f}"
+                    planet_legend_name.append(legend_name)
+                
+            self.info_planets = {
+                "distance_mas": planet_distance_mas,
+                "delta_mag": planet_delta_mag,
+                "contrast": planet_contrast,
+                "pa": planet_pa,
+                "name": planet_name,
+                "legend_name": planet_legend_name
+            }
+        else:
+            self.info_planets = None
+        return self.info_planets
