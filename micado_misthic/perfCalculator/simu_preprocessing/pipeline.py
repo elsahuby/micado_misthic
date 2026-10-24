@@ -25,13 +25,13 @@ from micado_misthic.perfCalculator.simu_preprocessing.resampling import resampli
 resampling = False
 ADI = True
 
-simulation_data_dir = r'/Volumes/MICADO_Back/2026/Planet'#/Volumes/MICADO_Back/Test_atraiter'#/Volumes/MICADO_Back/2026/CLC50_noNCPA_5Hz_Med/z=20'
-resampled_output_dir = r'/Volumes/TristanMIC2/Moved_from_resampled_2026_2'#/Volumes/TristanMIC2/Resampled_Planet'#/Volumes/MICADO_Back/TMP'  
-ADI_output_dir = r'/Volumes/TristanMIC2/ADI_oct26_test3'
-planet_on = 0
+simulation_data_dir = r'/Volumes/MICADO_Back/2026/Forgot'#/Volumes/MICADO_Back/Test_atraiter'#/Volumes/MICADO_Back/2026/CLC50_noNCPA_5Hz_Med/z=20'
+resampled_output_dir = r'/Volumes/TristanMIC2/Resampled2026_2'#/Volumes/TristanMIC2/Resampled_Planet'#/Volumes/MICADO_Back/TMP'  
+ADI_output_dir = r'/Volumes/TristanMIC2/ADI_oct26_all'
+planet_on = 1
 sampling_in_mas = [1.5, 4.0]
 
-planet_directory = '"Planet"' if planet_on == 1 else 'CoroStar'
+planet_directory = 'Planet' if planet_on == 1 else 'CoroStar'
 ADI_input_path = Path(resampled_output_dir) / planet_directory
 ADI_output_path = Path(ADI_output_dir) / planet_directory
 OBSERVATION_TIMES = (15, 30, 60, 90, 120)  #in minutes

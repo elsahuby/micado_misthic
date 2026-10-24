@@ -99,6 +99,8 @@ class PlottingMethods:
         Output:
         None
         """
+        silent = self.silentGUI
+
         if self.last_adi_sum is None or self.last_psf_sum is None:
             QMessageBox.information(
                 self,
@@ -108,7 +110,8 @@ class PlottingMethods:
             return
         from micado_misthic.analysis import get_rms_contrast
 
-        self.files_box.append("Starting contrast curve generation...")
+        if not silent:
+            self.files_box.append("Starting contrast curve generation...")
         QApplication.processEvents()
         start_time = time.time()
 
@@ -124,51 +127,12 @@ class PlottingMethods:
         planet_pa = None
         planet_name = None
         planet_delta_mag = None
-        planet_legend_name = None
-        print('Planet****',self.last_planet_contrast)
-        if params["planet"] == "Planet" and self.last_planet_contrast is not None:
-            planet_distance_mas = []
-            planet_contrast = []
-            planet_pa =[]
-            planet_name =[]
-            planet_delta_mag = []
-            planet_legend_name = []
-            if params["planet_distance"] != 0:
-                dist = params["planet_distance"]
-                name = params["planet_name"][0]
-                d_mag = params["delta_magnitude"]
-                contrast = self.last_planet_contrast[-1]
-                planet_distance_mas.append(dist)
-                planet_contrast.append(contrast)
-                planet_pa.append(90)
-                planet_name.append(name)
-                planet_delta_mag.append(d_mag)
-                legend_name = f"{name} @ {dist:.1f} mas & PA =90° - effective contrast = {contrast:.4e} - \u0394Mag = {d_mag:.2f}"
-                planet_legend_name.append(legend_name)
-                self.files_box.append(legend_name)
-                far_last_contrast= np.float32(self.last_planet_contrast)[:-1]
-            else:
-                far_last_contrast= np.float32(self.last_planet_contrast)
-            if np.sum(params["far_planet_distance"]) != 0:
-                d_mas_multi = params["far_planet_distance"]
-                pa_multi = params["far_planet_pa"]
-                name_multi = params["far_planet_name"]
-                dmag_multi = params["far_planet_deltamag"]
-                for dist, contrast, d_pa, name, d_mag in zip(d_mas_multi, far_last_contrast, pa_multi, name_multi, dmag_multi):
-                    planet_distance_mas.append(dist)
-                    planet_contrast.append(contrast)
-                    planet_pa.append(d_pa)
-                    planet_name.append(name)
-                    planet_delta_mag.append(d_mag)
-                    legend_name = f"{name} @ {dist:.1f} mas & PA ={d_pa:.1f}° - effective contrast = {contrast:.4e} - \u0394Mag = {d_mag:.2f}"
-                    planet_legend_name.append(legend_name)
-                    self.files_box.append(legend_name)
-        print(params)
+        info_planets = self.create_info_planets(params)
+
         legend_conditions = [f'{params["clc"]} - seeing: {params["seeing"]} - {params["ncpa"]} - filter: {params["filter"]} - sampling: {params["sampling"]}mas',
                               f'Star mag: {params["magnitude"]} - Zenith dist: {params["z_dist"]}° - Observation time= {params["observation_time"]} - DIT: {params["exp_time_dit"]:.3f}s']                        
 
-        self.display_contrast_curve(x, rms_contrast, 
-                    planet_distance_mas=planet_distance_mas, planet_contrast=planet_contrast, planet_legend_name = planet_legend_name, legend_conditions=legend_conditions)
+        self.display_contrast_curve(x, rms_contrast, info_planets, legend_conditions=legend_conditions)
         self.last_contrast_curve_path = None
         contrast_output_dir = (
             self.last_corostar_output_dir.parent
@@ -183,9 +147,10 @@ class PlottingMethods:
             
         self.tab_widget.setCurrentIndex(1)
         elapsed = time.time() - start_time
-        self.files_box.append(f"Contrast curve generated in {elapsed:.1f} s.")
+        if not silent:
+            self.files_box.append(f"Contrast curve generated in {elapsed:.1f} s.")
 
-    def display_contrast_curve(self, x, contrast, planet_distance_mas=None, planet_contrast=None, planet_legend_name = None, legend_conditions = None):
+    def display_contrast_curve(self, x, contrast, info_planets = None, legend_conditions = None):
         """Render the contrast curve and its optional planet marker.
 
         Input:
@@ -203,16 +168,21 @@ class PlottingMethods:
         ax.plot(x, contrast, color="#1a891a", linewidth=1.8)
         ax.scatter([],[], marker="none", label =legend_conditions[0])
         ax.scatter([],[], marker="none", label =legend_conditions[1])
-        if planet_distance_mas is not None and planet_contrast is not None and planet_legend_name is not None:
-            for p_dist, p_contrast,p_name,m_marker in zip(planet_distance_mas,planet_contrast,planet_legend_name, markers):
-                ax.scatter(p_dist, p_contrast, marker=m_marker, color="black",s=80, zorder=5, label=p_name,)
-        ax.legend()
-        ax.set_title('5-sigma contrast curve', fontsize=14, fontweight='bold')
+        if info_planets is not None:
+            if len(info_planets["distance_mas"]) >0:
+                for p_dist, p_contrast,p_name,m_marker in zip(info_planets["distance_mas"],info_planets["contrast"],info_planets["legend_name"], markers):
+                    ax.scatter(p_dist, p_contrast, marker=m_marker, color="red",s=80, zorder=5, label=p_name,)
+            y_max = np.nanmax((np.max(np.array(info_planets["contrast"])),np.nanmax(contrast)))
+        else:
+            y_max = np.nanmax(contrast)
+        ax.legend(framealpha=0.3)
+        ax.set_title('5-sigma contrast curve', fontsize=10, fontweight='bold')
         ax.set_xlabel('Angular separation (mas)')
         ax.set_ylabel('Contrast, 5-sigma')
         ax.set_yscale('log')
         ax.grid(color='.9')
         ax.set_xlim(left=0)
+        ax.set_ylim(top=10*y_max)
         self.contrast_figure.tight_layout()
         self.contrast_canvas.draw()
         self.tab_widget.setCurrentWidget(self.contrast_tab)

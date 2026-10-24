@@ -19,12 +19,11 @@ def get_contrast_from_contrast_curve_file(fits_path, distance_in_mas):
     """
     
     # Open the FITS file and read the data
-    with fits.open(fits_path) as hdul:
-        data = hdul[1].data  # Assuming the contrast curve is in the first extension
+    data = fits.getdata(fits_path) # the contrast curve is in the second row
     
     # Extract separation and contrast values
-    separations = data['separation_mas']
-    contrasts = data['contrast_5sigma']
+    separations = data[0]
+    contrasts = data[1]
     
     distance_in_mas = float(distance_in_mas)
     if not np.isfinite(distance_in_mas):

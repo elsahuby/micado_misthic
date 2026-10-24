@@ -157,6 +157,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         self.last_adi_source_dir = None
         self.corostar_path = None
         self.help_browser = None
+        self.silentGUI = True
 
         self.init_ui()
 
@@ -175,7 +176,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         left_frame.setFrameShape(QFrame.Shape.StyledPanel)
         left_frame.setMinimumWidth(420)
         left_layout = QVBoxLayout(left_frame)
-        left_layout.setSpacing(14)
+        left_layout.setSpacing(10)
 
         # Input section title.
         title = QLabel("Input parameters")
@@ -230,10 +231,16 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
 
         # Observation time.
         self.obs_time_combo = QComboBox()
-        #self.obs_time_combo.addItem("Not specified", None)
         self.obs_time_combo.addItems(["15min", "30min", "1h", "1h30","2h"])
         self.obs_time_combo.setCurrentText("1h")
         ###
+
+        # ND filters
+        self.nd_filter_combo = QComboBox()
+        self.nd_filter_combo.addItem("No ND filter", 0)
+        self.nd_filter_combo.addItem("ND=1 @ H,K - ND=2 @ J", 1)
+        self.nd_filter_combo.addItem("ND=3 @ H,K - ND=5 @ J", 3)
+        self.nd_filter_combo.setCurrentText("No ND filter")
 
         ### Star parameters
         self.seeing_combo = QComboBox()
@@ -302,12 +309,13 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
 
         ### Input parameter tabs
         self.input_tabs = QTabWidget()
+        self.input_tabs.setMinimumHeight(180)
 
         # Instrument tab.
         instrument_tab = QWidget()
         instrument_layout = QGridLayout(instrument_tab)
         instrument_layout.setHorizontalSpacing(12)
-        instrument_layout.setVerticalSpacing(8)
+        instrument_layout.setVerticalSpacing(12)
         instrument_layout.addWidget(QLabel("Seeing:"), 0, 0)
         instrument_layout.addWidget(self.seeing_combo, 0, 1)
         instrument_layout.addWidget(QLabel("Coronograph:"), 1, 0)
@@ -320,7 +328,8 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         instrument_layout.addWidget(self.filter_wavelength_combo, 4, 1)
         instrument_layout.addWidget(QLabel("Observation time:"), 5, 0)
         instrument_layout.addWidget(self.obs_time_combo, 5, 1)
-
+        instrument_layout.addWidget(QLabel("Density filter:"), 6, 0)
+        instrument_layout.addWidget(self.nd_filter_combo, 6, 1)
 
         # Star tab.
         star_tab = QWidget()
@@ -385,7 +394,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         # Preview of the selected input directory.
         self.path_box = QTextEdit()
         self.path_box.setReadOnly(True)
-        self.path_box.setFixedHeight(90)
+        self.path_box.setMinimumHeight(40)
         self.path_box.setStyleSheet("""
             QTextEdit {
                 background-color: #f7f7f7;
@@ -398,6 +407,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
 
         left_layout.addWidget(line)
 
+        
         ### Post-processing controls
         post_title = QLabel("Post-processing:")
         post_title.setStyleSheet("""
@@ -426,16 +436,7 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
         self.plot_contrast_button.setStyleSheet("""
             QPushButton {font-size: 15px; font-weight: bold; background-color: #4caf50; color: white; border-radius: 6px; }
             QPushButton:hover {background-color: #218838; }
-        """)#"background-color: #4caf50; color: white; border-radius: 4px;")
-
-        post_layout = QGridLayout()
-        post_layout.addWidget(QLabel("Save ADI:"), 1, 0)
-        post_layout.addWidget(self.save_adi_checkbox, 1, 1)
-        post_layout.addWidget(QLabel("Save folder:"), 2, 0)
-        post_layout.addWidget(self.save_folder_button, 2, 1)
-        left_layout.addLayout(post_layout)
-        left_layout.addWidget(self.save_folder_label)
-        left_layout.addWidget(self.plot_contrast_button)
+        """)
 
         # Run button.
         run_button = QPushButton("Run")
@@ -445,7 +446,17 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
             QPushButton:hover { background-color: #1b5fa7; }
         """)
         run_button.clicked.connect(self.run_processing)
+
+        post_layout = QGridLayout()
+        post_layout.addWidget(QLabel("Save ADI:"), 1, 0)
+        post_layout.addWidget(self.save_adi_checkbox, 1, 1)
+        post_layout.addWidget(QLabel("Save folder:"), 2, 0)
+        post_layout.addWidget(self.save_folder_button, 2, 1)
+        left_layout.addLayout(post_layout)
+        left_layout.addWidget(self.save_folder_label)
         left_layout.addWidget(run_button)
+        left_layout.addWidget(self.plot_contrast_button)
+
         left_layout.addStretch(1)
 
         # Information box
@@ -793,7 +804,10 @@ class InputParametersWindow(ParameterPathMethods, OutputMethods, ProcessingMetho
                 if result is None:
                     self.log_warning_once(f"Distance {argument} mas is outside the saved contrast curve range.")
                 else:
-                    self.files_box.append(f"{plot_function_name}({argument}) = {result}")
+                    if float(argument) < 70: 
+                        self.log_warning_once(f"{plot_function_name}({argument}) = {result} -- planet flux is attenuated at distance<70 mas")
+                    else:
+                        self.files_box.append(f"{plot_function_name}({argument}) = {result}")
         except Exception as e:
             self.log_warning_once(f"Function failed ({function_name}): {e}")
 

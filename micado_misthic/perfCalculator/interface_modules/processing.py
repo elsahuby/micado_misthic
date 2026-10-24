@@ -100,7 +100,7 @@ class ProcessingMethods:
             raise FileNotFoundError("Could not find the matching *_image_cube_mean.fits produced during preprocessing.")
         return files
 
-    def planet_norm_and_convolve(self, params, planet_adi_sum):
+    def planet_norm_and_convolve(self, params, planet_adi_sum, silent=True):
         """Normalize, optionally save and record a processed planet image.
 
         Input:
@@ -115,17 +115,17 @@ class ProcessingMethods:
         planet_adi_sum: ndarray
             Planet image normalized with the stellar PSF.
         """
-        planet_adi_sum_norm = self.normalize_adi_by_psf(planet_adi_sum, self.last_psf_sum, "planet", "star")
+        planet_adi_sum_norm = self.normalize_adi_by_psf(planet_adi_sum, self.last_psf_sum, "planet", "star", silent=silent)
         wavelength, pixel_scale = params["wavelength"], params["sampling"]
-        planet_adi_sum_conv, planet_psf_sum_conv = self.convolve_adi_and_psf(planet_adi_sum, self.last_psf_sum, wavelength, pixel_scale)
-        planet_adi_sum_conv_norm = self.normalize_adi_by_psf(planet_adi_sum_conv, planet_psf_sum_conv, "Convolved planet", "Convolved star")
+        planet_adi_sum_conv, planet_psf_sum_conv = self.convolve_adi_and_psf(planet_adi_sum, self.last_psf_sum, wavelength, pixel_scale, silent=silent)
+        planet_adi_sum_conv_norm = self.normalize_adi_by_psf(planet_adi_sum_conv, planet_psf_sum_conv, "Convolved planet", "Convolved star", silent=silent)
         self.last_planet_contrast.append(float(get_planet_contrast(planet_adi_sum_conv_norm)))
 
         return planet_adi_sum_norm, planet_adi_sum_conv_norm
 
     def process_and_reconstruct_planet(
             self, stellar_adi_sum, output_dir, params, noise_applied,
-            planet_noise_params, planet_processor):
+            planet_noise_params, planet_processor, silent=True):
         """Process the selected planet and combine it with the stellar image.
 
         Input:
@@ -157,7 +157,7 @@ class ProcessingMethods:
                 )
             planet_adi_sum = planet_processor(**kwargs)
             if planet_adi_sum is not None:
-                self.reconstruct_adi_image(stellar_adi_sum, planet_adi_sum, output_dir=output_dir)
+                self.reconstruct_adi_image(stellar_adi_sum, planet_adi_sum, output_dir=output_dir, silent=silent)
         except Exception as error:
             self.log_warning_once(f"Could not process planet ADI: {error}")
 
@@ -166,7 +166,7 @@ class ProcessingMethods:
             output_dir=None,
             apply_photon_noise=False,
             delta_t=None,
-            zenith_distance=None, params=None):
+            zenith_distance=None, params=None, silent=True):
         """Process the planet cube with optional noise before ADI.
 
         Input:
@@ -216,7 +216,8 @@ class ProcessingMethods:
             if delta_t is None or zenith_distance is None:
                 raise ValueError("delta_t and zenith_distance are required for planet photon noise.")
 
-            self.files_box.append("Creating planet cubes with photon noise and no read noise...")
+            if not silent:
+                self.files_box.append("Creating planet cubes with photon noise and no read noise...")
             perf_psf_data = fits.getheader(cube_file)["S_PERPSF"]
             frame_exp_time = np.float32(delta_t)
             planet_photon_flux, planet_emission_per_pix, _ = self.get_planet_micado_flux(
@@ -254,14 +255,14 @@ class ProcessingMethods:
             psf_cube_data,
             str(planet_path) + os.sep,
         )
-        return self.planet_norm_and_convolve(params,planet_adi_sum)
+        return self.planet_norm_and_convolve(params,planet_adi_sum, silent=silent)
 
     def process_precomputed_planet_adi_then_add_noise(
             self,
             output_dir=None,
             apply_photon_noise=False,
             delta_t=None,
-            zenith_distance=None, params=None):
+            zenith_distance=None, params=None, silent=True):
         """Load a preprocessed planet ADI, then optionally add image-level noise.
 
         Input:
@@ -301,7 +302,8 @@ class ProcessingMethods:
             planet_path = self.build_input_path("Planet", params)
             planet_small_cube = fits.getdata(Path(planet_path).parent.parent / "small_FOV_PSF_cube.fits")
             dim_s = np.shape(planet_small_cube)[1]
-            self.files_box.append("Calculating Planet signal from off-axis PSF images.")
+            if not silent:
+                self.files_box.append("Calculating Planet signal from off-axis PSF images.")
             parangle_file = Path(list(self.last_adi_source_dir.glob("*angle_tab.txt"))[0])
             angles_para = np.atleast_1d(np.loadtxt(parangle_file, skiprows=1))
             n_frames = len(angles_para)
@@ -311,7 +313,6 @@ class ProcessingMethods:
             if not (len(d_mas_multi) == len(delta_mag_multi) == len(pa_multi)):
                 raise ValueError("d_mas, delta_mag and pa must have the same number of values")
             for d_mas, d_mag, d_pa in zip(d_mas_multi,delta_mag_multi,pa_multi):
-                print("pass:",d_mas,d_mas/params["sampling"])
                 d_planet = d_mas/params["sampling"]
                 planet_cube = np.zeros((n_frames,dim,dim))
                 from micado_misthic.imgproc.imgproc import do_shift, rotate_frame
@@ -334,7 +335,7 @@ class ProcessingMethods:
                 # sigron=0 because the noise has already been applied to the stellar ADI, and the planet is added to that image. The read noise is already present in the stellar ADI.
                 planet_adi_sum, _ = add_noise_after_adi(planet_cube_adi, perf_psf_data, mean_file, photon_flux=planet_photon_flux,
                     sig_ron=0., emission_flux=0., frame_exp_time=frame_exp_time, silent=True,)
-                planet_adi_sum, planet_adi_sum_conv = self.planet_norm_and_convolve(params, planet_adi_sum)
+                planet_adi_sum, planet_adi_sum_conv = self.planet_norm_and_convolve(params, planet_adi_sum, silent=silent)
                 all_planet_adi += planet_adi_sum
                 all_planet_adi_conv += planet_adi_sum_conv
 
@@ -342,23 +343,22 @@ class ProcessingMethods:
         if params["planet_distance"] != 0:
             planet_path = self.get_with_planet_path(params)
             if planet_path is None:
-                self.files_box.append("Warning: Planet path is not available. Skipping planet ADI.")
+                self.log_warning_once("Planet path is not available. Skipping planet ADI.")
                 return None
             try:
                 input_files = self.get_preprocessed_adi_files(
                     planet_path, require_noise_inputs=apply_photon_noise,
                 )
             except FileNotFoundError as error:
-                self.files_box.append(f"Warning: {error} Folder: {planet_path}")
+                self.log_warning_once(f"{error} Folder: {planet_path}")
                 return None
             adi_file = input_files["adi_sum"]
             planet_cube_adi = fits.getdata(adi_file)
             mean_file = input_files["mean"]
 
-            self.files_box.append(f"Loading preprocessed planet ADI: {adi_file.name}")
+            if not silent:
+                self.files_box.append(f"Loading preprocessed planet ADI: {adi_file.name}")
             QApplication.processEvents()
-
-            self.files_box.append("Adding photon and emission noise to the preprocessed planet ADI...")
   
             delta_mag = params["delta_magnitude"]
             planet_photon_flux, _, _ = self.get_planet_micado_flux(
@@ -366,14 +366,16 @@ class ProcessingMethods:
             # sigron=0 because the noise has already been applied to the stellar ADI, and the planet is added to that image. The read noise is already present in the stellar ADI.
             planet_adi_sum, _ = add_noise_after_adi(planet_cube_adi, perf_psf_data, mean_file, photon_flux=planet_photon_flux,
                 sig_ron=0., emission_flux=0., frame_exp_time=frame_exp_time, silent=True,)
-            planet_adi_sum, planet_adi_sum_conv = self.planet_norm_and_convolve(params, planet_adi_sum)
+            planet_adi_sum, planet_adi_sum_conv = self.planet_norm_and_convolve(params, planet_adi_sum, silent=silent)
             all_planet_adi += planet_adi_sum
             all_planet_adi_conv += planet_adi_sum_conv
-        self.save_planet_adi_result(all_planet_adi, output_dir, adi_sum_conv= all_planet_adi_conv)
+
+        info_planets = self.create_info_planets(params)
+        self.save_planet_adi_result(all_planet_adi, info_planets, output_dir, adi_sum_conv= all_planet_adi_conv)
         return all_planet_adi_conv
 
     def perform_adi_with_noisy_cubes(
-            self, path, save_root=None, apply_noise=False, output_dir=None, params=None):
+            self, path, save_root=None, apply_noise=False, output_dir=None, params=None, silent=True):
         """Run the stellar NOISE-then-ADI processing chain.
 
         Input:
@@ -470,7 +472,7 @@ class ProcessingMethods:
                         frame_exp_time,
                         sig_ron=15.,
                         no_noise=False,
-                        silent=True,
+                        silent=silent,
                     )
                     ellapsed_image_noise = time.time() - start_time_image_noise
                     print(f"Image cube with photon noise created in {ellapsed_image_noise:.2f} s.")
@@ -484,7 +486,7 @@ class ProcessingMethods:
                         frame_exp_time,
                         sig_ron=15.,
                         no_noise=False,
-                        silent=True,
+                        silent=silent,
                     )
                     ellapsed_cube_noise = time.time() - start_time_psf_noise
                     print(f"PSF cube with photon noise created in {ellapsed_cube_noise:.2f} s.")
@@ -499,7 +501,7 @@ class ProcessingMethods:
         params["noise"] = noise_applied
         start_time_adi = time.time()
         adi_sum_ADU, psf_sum = micado_adi(image_cube_noise, psf_cube_noise, str(path) + os.sep)
-        adi_sum = self.normalize_adi_by_psf(adi_sum_ADU, psf_sum, "star")
+        adi_sum = self.normalize_adi_by_psf(adi_sum_ADU, psf_sum, "star", silent=silent)
         psf_sum_ADU = np.sum(psf_cube_data, axis=0)* photon_flux / np.sum(perf_psf_data)
         ellapsed_adi = time.time() - start_time_adi
         print(f"Legacy ADI processing completed in {ellapsed_adi:.2f} s.")
@@ -523,7 +525,7 @@ class ProcessingMethods:
 
         self.process_and_reconstruct_planet(
             adi_sum, output_dir, params, noise_applied, planet_noise_params,
-            self.process_planet_adi_with_noisy_cubes,
+            self.process_planet_adi_with_noisy_cubes, silent=silent
         )
 
         total_time_elapsed = time.time() - total_time_start
@@ -532,7 +534,7 @@ class ProcessingMethods:
         )
 
     def process_precomputed_stellar_adi_then_add_noise(
-            self, path, save_root=None, apply_noise=False, output_dir=None, params=None):
+            self, path, save_root=None, apply_noise=False, output_dir=None, params=None, silent=True):
         """Load preprocessed stellar ADI products, then optionally add noise.
 
         Input:
@@ -568,10 +570,10 @@ class ProcessingMethods:
         adi_file, psf_sum_file = input_files["adi_sum"], input_files["psf_sum"]
         mean_file = input_files["mean"]
 
-        self.files_box.append(f"Loading preprocessed ADI: {adi_file.name}")
+        if not silent:
+            self.files_box.append(f"Loading preprocessed ADI: {adi_file.name}")
         QApplication.processEvents()
         start_time = time.time()
-        ###print(adi_file)
         perf_psf_data = fits.getheader(adi_file)["S_PERPSF"]
 
         noise_applied = False
@@ -595,10 +597,7 @@ class ProcessingMethods:
             else:
                 try:
                     zenith_distance = np.float32(zenith_distance)
-                    start_time_flux = time.time()
                     photon_flux, emission_per_pix, _ = self.get_micado_flux(delta_t=delta_t, zenith_distance=zenith_distance, params=params)
-                    ellapsed_flux = time.time() - start_time_flux
-                    print(f"Photon flux and emission per pixel computed in {ellapsed_flux:.2f} s.")
                     frame_exp_time = np.float32(delta_t)
                     noise_parameters = {
                         "photon_flux": photon_flux,
@@ -608,10 +607,9 @@ class ProcessingMethods:
                     }
                     noise_applied = True
                     planet_noise_params = (delta_t, zenith_distance)
-                    self.files_box.append(
-                        "Noise parameters ready: 2D noise will be added to the "
-                        f"preprocessed ADI (delta_t={delta_t}s)."
-                    )
+                    if not silent:
+                        self.files_box.append("Noise parameters ready: 2D noise will be added to the "
+                            f"preprocessed ADI (delta_t={delta_t}s).")
                 except Exception as e:
                     self.log_warning_once(f"Warning: Could not prepare ADI noise: {str(e)}")
                     # A failed noise setup falls back to the clean ADI result.
@@ -620,7 +618,8 @@ class ProcessingMethods:
         start_time_adi = time.time()
         if noise_applied:
             adi_sum_clean = fits.getdata(adi_file)
-            self.files_box.append(f"Using preprocessed cube mean: {mean_file.name}")
+            if not silent:
+                self.files_box.append(f"Using preprocessed cube mean: {mean_file.name}")
             psf_sum = np.asarray(fits.getdata(psf_sum_file), dtype=np.float64)
             values = []
             if params["planet_distance"] != 0:
@@ -633,13 +632,12 @@ class ProcessingMethods:
             else:
                 max_planet = 0
 
-            print("Max_planet", max_planet)
             try:
                 adi_sum_ADU, exp_time_dit = add_noise_after_adi(
                     adi_sum_clean,
                     perf_psf_data,
                     mean_file,
-                    silent=True,
+                    silent=silent,
                     max_planet=max_planet,
                     **noise_parameters,
                 )
@@ -652,25 +650,25 @@ class ProcessingMethods:
             adi_sum_ADU = fits.getdata(adi_file)
             psf_sum_ADU = fits.getdata(psf_sum_file)
 
-        self.files_box.append(f"Exposure_time: {exp_time_dit:.2f} s.")
 
         wavelength, pixel_scale = params["wavelength"], params["sampling"]
-        #adi_sum, psf_sum = self.convolve_adi_and_psf(
-        #    adi_sum, psf_sum, wavelength, pixel_scale)
-        adi_sum = self.normalize_adi_by_psf(adi_sum_ADU, psf_sum_ADU, "star")
-        adi_sum_conv, psf_sum_conv = self.convolve_adi_and_psf(adi_sum_ADU, psf_sum_ADU, wavelength, pixel_scale)
-        adi_sum_conv_norm = self.normalize_adi_by_psf(adi_sum_conv, psf_sum_conv, "star")
-        ellapsed_adi = time.time() - start_time_adi
-        print(f"ADI processing completed in {ellapsed_adi:.2f} s.")
+        adi_sum = self.normalize_adi_by_psf(adi_sum_ADU, psf_sum_ADU, "star", silent=silent)
+        adi_sum_conv, psf_sum_conv = self.convolve_adi_and_psf(adi_sum_ADU, psf_sum_ADU, wavelength, pixel_scale, silent=silent)
+        adi_sum_conv_norm = self.normalize_adi_by_psf(adi_sum_conv, psf_sum_conv, "star", silent=silent)
         elapsed = time.time() - start_time
-        self.files_box.append(f"ADI processing completed in {elapsed:.1f} s.")
+        if not silent:
+            self.files_box.append(f"ADI processing completed in {elapsed:.1f} s.")
 
         if output_dir is not None:
-            if noise_applied:
+            if noise_applied and not silent:
                 self.files_box.append(
                     "The preprocessed ADI file was kept unchanged; noise was applied "
                     "to the in-memory 2D result."
                 )
+            if params['planet'] == 'Planet':
+                self.files_box.append(f"Star and planet data written in {output_dir}")
+            else:
+                self.files_box.append(f"Star only data written in {output_dir}")
             self.save_adi_results(adi_sum, psf_sum_ADU, output_dir, adi_sum_conv=adi_sum_conv_norm, adi_sum_ADU=adi_sum_ADU)
 
         self.last_adi_sum = adi_sum_conv_norm
@@ -679,15 +677,16 @@ class ProcessingMethods:
 
         self.process_and_reconstruct_planet(
             adi_sum, output_dir, params, noise_applied, planet_noise_params,
-            self.process_precomputed_planet_adi_then_add_noise,
+            self.process_precomputed_planet_adi_then_add_noise, silent=silent
         )
         
 
         total_time_elapsed = time.time() - total_time_start
-        self.files_box.append(f"Total ADI processing function time: {total_time_elapsed:.1f} s.")
+        if not silent:
+            self.files_box.append(f"Total ADI processing function time: {total_time_elapsed:.1f} s.")
         self.display_info_simul( exp_time_dit, params)
                         
-    def normalize_adi_by_psf(self, adi_sum, psf_sum, label, psf_label=None):
+    def normalize_adi_by_psf(self, adi_sum, psf_sum, label, psf_label=None, silent=True):
         """Normalize an ADI image by a PSF maximum and report the operation.
 
         Input:
@@ -716,13 +715,13 @@ class ProcessingMethods:
             self.log_warning_once(f"Warning: {psf_label} PSF max is zero. {label} ADI image was not normalized.")
             return adi_sum
 
-        self.files_box.append(f"Normalized {label} ADI by {psf_label} PSF max: {max_psf:.6e}")
+        if not silent:
+            self.files_box.append(f"Normalized {label} ADI by {psf_label} PSF max: {max_psf:.6e}")
         if self.result_params is not None:
             self.result_params["normalization"][label] = max_psf
-        print(self.result_params)
         return normalize_by_psf_max(adi_sum, psf_sum)
 
-    def reconstruct_adi_image(self, star_adi_path, planet_adi_path, output_dir=None):
+    def reconstruct_adi_image(self, star_adi_path, planet_adi_path, output_dir=None, silent=True):
         """Combine final star and planet images and update the display.
 
         Input:
@@ -754,11 +753,13 @@ class ProcessingMethods:
         self.adi_image_combo.setCurrentText("ADI star + planet")
         if save_path is not None:
             self.write_fits(save_path, reconstructed, product="COMBINED")
-            self.files_box.append(f"Reconstructed ADI result saved:\n- {save_path}")
-        self.files_box.append("Reconstructed ADI image completed with perfCalculator.utils.")
+            if not silent:
+                self.files_box.append(f"Reconstructed ADI result saved:\n- {save_path}")
+        if not silent:
+            self.files_box.append("Reconstructed ADI image completed with perfCalculator.utils.")
         return reconstructed
 
-    def convolve_adi_and_psf(self, adi_sum, psf_sum, wavelength, pixel_scale, tel_diameter=38.542):
+    def convolve_adi_and_psf(self, adi_sum, psf_sum, wavelength, pixel_scale, tel_diameter=38.542, silent=True):
         """Convolve ADI and PSF images with a lambda/(2D) aperture.
 
         Input:
@@ -783,10 +784,10 @@ class ProcessingMethods:
             raise ValueError("ADI and PSF must be 2D images with the same shape.")
 
         l_over_d_pix = wavelength * 1e-6 / tel_diameter * 180. / np.pi * 3600 * 1e3 / pixel_scale
-        print('size convolution', l_over_d_pix)
         mask_radius = 0.5 * l_over_d_pix
         mask = get_circle_mask(adi_sum.shape, mask_radius)
-        self.files_box.append(f"Convolving ADI and PSF: aperture radius = {mask_radius:.3f} pixels.")
+        if not silent:
+            self.files_box.append(f"Convolving ADI and PSF: aperture radius = {mask_radius:.3f} pixels.")
         return adi_sum, (psf_sum if psf_sum is not None else None )
         #return convolve_adi_image(adi_sum, mask), (
         #    convolve_adi_image(psf_sum, mask) if psf_sum is not None else None )
@@ -802,7 +803,6 @@ class ProcessingMethods:
         except ValueError as error:
             QMessageBox.warning(self, "Invalid parameters", str(error))
             return
-        print("========== PARAMETERS ==========", params)
         path = self.build_input_path("CoroStar", params)
         self.path_box.setText(str(path) + os.sep)
 

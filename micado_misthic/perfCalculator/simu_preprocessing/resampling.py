@@ -56,7 +56,7 @@ def resampling(
     processed_files = 0
     print(
         f"Starting resampling from {input_directory} "
-        f"({'"Planet"' if planet_on == 1 else 'CoroStar'} mode), "
+        f"({'Planet' if planet_on == 1 else 'CoroStar'} mode), "
         f"selection: corono={corono or 'all'}, ncpa={ncpa or 'all'}, "
         f"seeing={seeing or 'all'}"
     )

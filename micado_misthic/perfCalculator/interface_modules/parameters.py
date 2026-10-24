@@ -156,7 +156,7 @@ class ParameterPathMethods:
         aperture_surface = get_aperture_surface(str(params["base_folder"] / "PUPIL" / "Pupil_ELT_v03.fits"))
         return get_micado_flux(
             flux_dir, star_flux, f"{wavelength:.3f}", np.float32(delta_t), aperture_surface,
-            airmass=1 / np.cos(np.radians(zenith_distance)), pixel_scale=params["sampling"],
+            airmass=1 / np.cos(np.radians(zenith_distance)), pixel_scale=params["sampling"], ND_lyot = params["nd"],
         )
 
     def get_planet_micado_flux(self, delta_t=None, zenith_distance=None, wavelength=None, path=None, params=None, delta_mag=None):
@@ -284,6 +284,7 @@ class ParameterPathMethods:
             "ncpa": "NCPA" if self.ncpa_combo.currentText() == "Yes" else "NoNCPA",
             "seeing": self.seeing_combo.currentText(),
             "filter": filt,
+            "nd":self.nd_filter_combo.currentData(),
             "wavelength": float(wavelength.replace("µm", "").strip()),
             "sampling": float(self.sampling_combo.currentText()),
             "observation_time": self.get_selected_observation_time(),

@@ -177,7 +177,7 @@ def get_aperture_surface(aperture_filename, diam_pix=1015, diam_m = 38.542):
     return aperture_surface
 
 def get_micado_flux(flux_dir, spectrum, filter_type, obs_time, aperture_surface_m2, 
-                    airmass=1, pixel_scale=4, tel_diam=38.542, display_plot=False):
+                    airmass=1, pixel_scale=4, tel_diam=38.542, display_plot=False, ND_lyot = 0):
     '''
     Return the photon flux for a given target and instrument configuration.
     Inputs:
@@ -207,6 +207,7 @@ def get_micado_flux(flux_dir, spectrum, filter_type, obs_time, aperture_surface_
     # airmass is set to 1 by default
     # pixel_scale is set to 4 mas by default
     
+    tr_nd0       = fits.getdata(flux_dir+'Transmission_ND1_3_v2026.fits') #include nd transmission
     tr_filter0  = fits.getdata(flux_dir+'Transmission_filter_J1J2H1H2K1K2_v2026.fits') # update 01/07/2026 Tristan (2020 -> 2026)
     tr_filter1  = fits.getdata(flux_dir+'Transmission_filter_JHK.fits')
     tr_atmo0    = fits.getdata(flux_dir+'Transmission_atmo_airmass=1_to_3.fits')
@@ -256,11 +257,20 @@ def get_micado_flux(flux_dir, spectrum, filter_type, obs_time, aperture_surface_
     
     # Total emission in the filter
     l_over_d = wave_tr*1e-6/tel_diam*180./np.pi*3600.*1000. # mas
-    print(tr_filter)
     emission_per_pix = np.sum(emission * tr_filter * (pixel_scale/l_over_d)**2) * wave_step * obs_time # in photons
 
+    #Include possible ND Lyot
+    if ND_lyot != 0:
+        if ND_lyot == 1:
+            tr_nd=tr_nd0[0,:]
+        if ND_lyot == 3:
+            tr_nd=tr_nd0[1,:]
+    else:
+        tr_nd =1.
+  
+
     # Total flux in the Final Pupil plane w/o coronagraph
-    tr_inst = tr_filter * tr_inst_tel
+    tr_inst = tr_filter * tr_inst_tel * tr_nd
     final_photon_flux = np.sum(tr_inst*tr_atmo*flux) * wave_step * obs_time # in photons
 
     # Output transmission

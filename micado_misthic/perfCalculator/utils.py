@@ -234,7 +234,6 @@ def add_noise_after_adi(
     noise_var = mean_abs_cube_photons * n_frames
     photon_noise = rng.poisson(noise_var) - noise_var
 
-    print('max',np.max(mean_abs_cube),max_planet,np.max(mean_abs_cube_photons),max_planet*conv_factor,max(np.max(mean_abs_cube_photons),max_planet*conv_factor) / frame_exp_time)
     if sig_ron != 0:
         if set_ron_equivalent:
             full_well_capacity = 5e4
